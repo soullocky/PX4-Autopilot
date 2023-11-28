@@ -1,0 +1,47 @@
+#!/bin/sh
+#
+# @name Annular Quadrotor
+#
+# @type Quadrotor x
+# @class Copter
+#
+# @output MAIN1 motor 1
+# @output MAIN2 motor 2
+# @output MAIN3 motor 3
+# @output MAIN4 motor 4
+# @output AUX1 Inner servo motor for rotor 1
+# @output AUX2 Inner servo motor for rotor 2
+# @output AUX3 Inner servo motor for rotor 3
+# @output AUX4 Inner servo motor for rotor 4
+# @output AUX5 Outer servo motor for rotor 1
+# @output AUX6 Outer servo motor for rotor 2
+# @output AUX7 Outer servo motor for rotor 3
+# @output AUX8 Outer servo motor for rotor 4
+
+. ${R}etc/init.d/rc.mc_defaults
+
+param set-default CA_AIRFRAME 0
+param set-default CA_ROTOR_COUNT 4
+param set-default CA_ROTOR0_PX 0.176
+param set-default CA_ROTOR0_PY 0.176
+param set-default CA_ROTOR1_PX -0.176
+param set-default CA_ROTOR1_PY -0.176
+param set-default CA_ROTOR2_PX 0.176
+param set-default CA_ROTOR2_PY -0.176
+param set-default CA_ROTOR2_KM -0.05
+param set-default CA_ROTOR3_PX -0.176
+param set-default CA_ROTOR3_PY 0.176
+param set-default CA_ROTOR3_KM -0.05
+param set-default CA_ROTOR1_TILT 1
+param set-default CA_ROTOR2_TILT 2
+param set-default CA_ROTOR3_TILT 3
+param set-default CA_ROTOR4_TILT 4
+
+param set-default CA_SV_TL_COUNT 8
+param set-default CA_SV_TL1_CT 3
+param set-default CA_SV_TL2_CT 3
+param set-default CA_SV_TL3_CT 3
+param set-default CA_SV_TL4_CT 3
+
+set MIXER annular_quad_tilt
+set MIXER_AUX annular_quad_tilt

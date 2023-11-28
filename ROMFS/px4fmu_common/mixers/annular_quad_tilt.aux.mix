@@ -1,0 +1,51 @@
+This file defines the main outputs mixer for an Annular-quadrotor in the x configuration.
+
+# @output AUX1 Inner servo motor for rotor 1
+# @output AUX2 Inner servo motor for rotor 2
+# @output AUX3 Inner servo motor for rotor 3
+# @output AUX4 Inner servo motor for rotor 4
+# @output AUX5 Outer servo motor for rotor 1
+# @output AUX6 Outer servo motor for rotor 2
+# @output AUX7 Outer servo motor for rotor 3
+# @output AUX8 Outer servo motor for rotor 4
+
+Servo1
+
+M: 3
+S: 0 0  10000  10000      0 -10000  10000
+S: 0 1  10000  10000      0 -10000  10000
+S: 0 2  10000  10000      0 -10000  10000
+
+Servo2
+M: 3
+S: 0 0  10000  10000      0 -10000  10000
+S: 0 1  10000  10000      0 -10000  10000
+S: 0 2  10000  10000      0 -10000  10000
+
+Servo3
+M: 3
+S: 0 0  10000  10000      0 -10000  10000
+S: 0 1  10000  10000      0 -10000  10000
+S: 0 2  10000  10000      0 -10000  10000
+
+Servo4
+M: 3
+S: 0 0  10000  10000      0 -10000  10000
+S: 0 1  10000  10000      0 -10000  10000
+S: 0 2  10000  10000      0 -10000  10000
+
+Servo5
+M: 1
+S: 3 5  10000  10000      0 -10000  10000
+
+Servo6
+M: 1
+S: 3 5  10000  10000      0 -10000  10000
+
+Servo7
+M: 1
+S: 3 5  10000  10000      0 -10000  10000
+
+Servo8
+M: 1
+S: 3 5  10000  10000      0 -10000  10000

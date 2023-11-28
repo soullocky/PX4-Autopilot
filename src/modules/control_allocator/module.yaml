@@ -1,6 +1,6 @@
 __max_num_mc_motors: &max_num_mc_motors 8
 __max_num_servos: &max_num_servos 8
-__max_num_tilts: &max_num_tilts 4
+__max_num_tilts: &max_num_tilts 8
 
 module_name: Control Allocation
 
@@ -311,6 +311,10 @@ parameters:
                 2: '2'
                 3: '3'
                 4: '4'
+                5: '5'
+                6: '6'
+                7: '7'
+                8: '8'
             default: 0
         CA_SV_TL${i}_CT:
             description:
