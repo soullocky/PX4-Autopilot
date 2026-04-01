@@ -68,6 +68,8 @@ public:
 		float thrust_coef;
 		float moment_ratio;
 		int tilt_index;
+		int tilt_index_roll;
+		int tilt_index_pitch;
 	};
 
 	struct Geometry {

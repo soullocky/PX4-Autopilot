@@ -1,6 +1,6 @@
 __max_num_mc_motors: &max_num_mc_motors 12
 __max_num_servos: &max_num_servos 8
-__max_num_tilts: &max_num_tilts 4
+__max_num_tilts: &max_num_tilts 8   # 最多8个舵机
 
 module_name: Control Allocation
 
@@ -33,6 +33,7 @@ parameters:
                 13: Rover (Mecanum)
                 14: Spacecraft 2D
                 15: Spacecraft 3D
+                16: Tiltquad
             default: 0
 
         CA_METHOD:
@@ -354,6 +355,7 @@ parameters:
                 2: '2'
                 3: '3'
                 4: '4'
+                8: '8'
             default: 0
         CA_SV_TL${i}_CT:
             description:
@@ -365,9 +367,22 @@ parameters:
                 1: 'Yaw'
                 2: 'Pitch'
                 3: 'Yaw and Pitch'
+                4: 'Roll'
+                5: 'Roll and Pitch'
             num_instances: *max_num_tilts
             instance_start: 0
             default: 1
+        CA_SV_TL${i}_AX:
+            description:
+                short: Tilt Servo ${i} Tilt DoF
+                long: Define the which control the tilt servo is engaged in.
+            type: enum # This could be a bitset, but the enum shows up nicer in the UI
+            values:
+                0: 'PitchLike'
+                1: 'RollLike'
+            num_instances: *max_num_tilts
+            instance_start: 0
+            default: 0
         CA_SV_TL${i}_MINA:
             description:
                 short: Tilt Servo ${i} Tilt Angle at Minimum
@@ -1205,3 +1220,33 @@ mixer:
                         position: [ -1, 1, 0 ]
                       - name: 'Left Motor Back'
                         position: [ -1, -1, 0 ]
+
+            16: # Tiltquad
+                title: 'Tiltquad'
+                actuators:
+                  - actuator_type: 'motor'
+                    count: 'CA_ROTOR_COUNT'
+                    per_item_parameters:
+                        standard:
+                            position: [ 'CA_ROTOR${i}_PX', 'CA_ROTOR${i}_PY', 'CA_ROTOR${i}_PZ' ]
+                        extra:
+                          - name: 'CA_ROTOR${i}_KM'
+                            label: 'Direction CCW'
+                            function: 'spin-dir'
+                            show_as: 'true-if-positive'
+                          - name: 'CA_ROTOR${i}_TILT'
+                            label: 'Tilted by'
+                  - actuator_type: 'servo'
+                    group_label: 'Tilt Servos'
+                    count: 'CA_SV_TL_COUNT'
+                    item_label_prefix: 'Tilt ${i}'
+                    per_item_parameters:
+                        extra:
+                          - name: 'CA_SV_TL${i}_MINA'
+                            label: "Angle at Min\nTilt"
+                          - name: 'CA_SV_TL${i}_MAXA'
+                            label: "Angle at Max\nTilt"
+                          - name: 'CA_SV_TL${i}_TD'
+                            label: 'Tilt Direction'
+                          - name: 'CA_SV_TL${i}_CT'
+                            label: 'Use for Control'

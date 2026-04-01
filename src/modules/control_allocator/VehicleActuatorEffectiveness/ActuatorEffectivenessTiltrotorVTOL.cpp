@@ -51,9 +51,10 @@ ActuatorEffectivenessTiltrotorVTOL::ActuatorEffectivenessTiltrotorVTOL(ModulePar
 	_param_handles.com_spoolup_time = param_find("COM_SPOOLUP_TIME");
 
 	updateParams();
-	setFlightPhase(FlightPhase::HOVER_FLIGHT);
+	setFlightPhase(FlightPhase::HOVER_FLIGHT);	// 默认飞行状态
 }
 
+// 读取电机“启动时间”（spool-up time），防止刚解锁就倾转（安全逻辑）
 void ActuatorEffectivenessTiltrotorVTOL::updateParams()
 {
 	ModuleParams::updateParams();
@@ -61,6 +62,7 @@ void ActuatorEffectivenessTiltrotorVTOL::updateParams()
 	param_get(_param_handles.com_spoolup_time, &_param_spoolup_time);
 }
 
+// 构建控制分配矩阵
 bool
 ActuatorEffectivenessTiltrotorVTOL::getEffectivenessMatrix(Configuration &configuration,
 		EffectivenessUpdateReason external_update)
@@ -70,20 +72,20 @@ ActuatorEffectivenessTiltrotorVTOL::getEffectivenessMatrix(Configuration &config
 	}
 
 	// MC motors
-	configuration.selected_matrix = 0;
-	_mc_rotors.enableYawByDifferentialThrust(!_tilts.hasYawControl());
-	_mc_rotors.enableThreeDimensionalThrust(false);
+	configuration.selected_matrix = 0;		// 矩阵0 = 电机 + 倾转
+	_mc_rotors.enableYawByDifferentialThrust(!_tilts.hasYawControl());		// 是否用差动推力控制 yaw
+	_mc_rotors.enableThreeDimensionalThrust(false);		// 是否允许 3D 推力，是
 
 	// Update matrix with tilts in vertical position when update is triggered by a manual
 	// configuration (parameter) change. This is to make sure the normalization
 	// scales are tilt-invariant. Note: configuration updates are only possible when disarmed.
 	const float collective_tilt_control_applied = (external_update == EffectivenessUpdateReason::CONFIGURATION_UPDATE) ?
 			-1.f : _last_collective_tilt_control;
-	_untiltable_motors = _mc_rotors.updateAxisFromTilts(_tilts, collective_tilt_control_applied)
+	_untiltable_motors = _mc_rotors.updateAxisFromTilts(_tilts, collective_tilt_control_applied)		// 根据 tilt 更新推力方向
 			     << configuration.num_actuators[(int)ActuatorType::MOTORS];
 
-	const bool mc_rotors_added_successfully = _mc_rotors.addActuators(configuration);
-	_motors = _mc_rotors.getMotors();
+	const bool mc_rotors_added_successfully = _mc_rotors.addActuators(configuration);		// 把电机加入矩阵0
+	_motors = _mc_rotors.getMotors();		// 确定电机数量
 
 	// Control Surfaces
 	configuration.selected_matrix = 1;
@@ -91,7 +93,7 @@ ActuatorEffectivenessTiltrotorVTOL::getEffectivenessMatrix(Configuration &config
 	const bool surfaces_added_successfully = _control_surfaces.addActuators(configuration);
 
 	// Tilts
-	configuration.selected_matrix = 0;
+	configuration.selected_matrix = 0;		// 把舵机加入矩阵0
 	_first_tilt_idx = configuration.num_actuators_matrix[configuration.selected_matrix];
 	_tilts.updateTorqueSign(_mc_rotors.geometry(), true /* disable pitch to avoid configuration errors */);
 	const bool tilts_added_successfully = _tilts.addActuators(configuration);
@@ -103,6 +105,7 @@ ActuatorEffectivenessTiltrotorVTOL::getEffectivenessMatrix(Configuration &config
 	return (mc_rotors_added_successfully && surfaces_added_successfully && tilts_added_successfully);
 }
 
+// 在控制分配之后，对执行器输出做“二次处理”
 void ActuatorEffectivenessTiltrotorVTOL::allocateAuxilaryControls(const float dt, int matrix_index,
 		ActuatorVector &actuator_sp)
 {
@@ -133,13 +136,14 @@ void ActuatorEffectivenessTiltrotorVTOL::updateSetpoint(const matrix::Vector<flo
 		tiltrotor_extra_controls_s tiltrotor_extra_controls;
 
 		if (_tiltrotor_extra_controls_sub.copy(&tiltrotor_extra_controls)) {
-			float control_collective_tilt = tiltrotor_extra_controls.collective_tilt_normalized_setpoint * 2.f - 1.f;
+			float control_collective_tilt = tiltrotor_extra_controls.collective_tilt_normalized_setpoint * 2.f - 1.f;	// 读取 tilt 控制量映射到-1..1
 
 			// set control_collective_tilt to exactly -1 or 1 if close to these end points
 			control_collective_tilt = control_collective_tilt < -0.99f ? -1.f : control_collective_tilt;
 			control_collective_tilt = control_collective_tilt > 0.99f ? 1.f : control_collective_tilt;
 
 			// initialize _last_collective_tilt_control
+			// _last_collective_tilt_control用于更新 tilt 状态，判断是否需要重新计算矩阵
 			if (!PX4_ISFINITE(_last_collective_tilt_control)) {
 				_last_collective_tilt_control = control_collective_tilt;
 
@@ -152,6 +156,7 @@ void ActuatorEffectivenessTiltrotorVTOL::updateSetpoint(const matrix::Vector<flo
 			// of the thrust axis in z is apporaching 0, and by that is increasing the motor output to max.
 			// Transition to HF: disable thrust axis tilting, and assume motors are vertical. This is to avoid
 			// a thrust spike when the transition is initiated (as then the tilt is fully forward).
+			// 过渡阶段限制，防止推力突变
 			if (_flight_phase == FlightPhase::TRANSITION_HF_TO_FF) {
 				_last_collective_tilt_control = math::constrain(_last_collective_tilt_control, -1.f, 0.f);
 
@@ -167,13 +172,14 @@ void ActuatorEffectivenessTiltrotorVTOL::updateSetpoint(const matrix::Vector<flo
 
 					// as long as throttle spoolup is not completed, leave the tilts in the disarmed position (in hover)
 					if (throttleSpoolupFinished() || _flight_phase != FlightPhase::HOVER_FLIGHT) {
-						actuator_sp(i + _first_tilt_idx) += control_collective_tilt;
+						actuator_sp(i + _first_tilt_idx) += control_collective_tilt;		// 执行器输出加入 tilt actuator
 
 					} else {
 						actuator_sp(i + _first_tilt_idx) = NAN; // NaN sets tilts to disarmed position
 					}
 				}
 
+				// yaw 饱和检测，判断倾转是否已经无法再提供 yaw 力矩
 				// custom yaw saturation logic: only declare yaw saturated if all tilts are at the negative or positive yawing limit
 				if (_tilts.getYawTorqueOfTilt(i) > FLT_EPSILON) {
 
@@ -213,6 +219,7 @@ void ActuatorEffectivenessTiltrotorVTOL::updateSetpoint(const matrix::Vector<flo
 	}
 }
 
+// 根据不同飞行模式判断哪些电机需要使用
 void ActuatorEffectivenessTiltrotorVTOL::setFlightPhase(const FlightPhase &flight_phase)
 {
 	if (_flight_phase == flight_phase) {
@@ -235,6 +242,7 @@ void ActuatorEffectivenessTiltrotorVTOL::setFlightPhase(const FlightPhase &fligh
 	}
 }
 
+// 向控制器反馈 Yaw 是否已经饱和（用于rate controller anti-windup）
 void ActuatorEffectivenessTiltrotorVTOL::getUnallocatedControl(int matrix_index, control_allocator_status_s &status)
 {
 	// only handle matrix 0 (motors and tilts)
@@ -255,6 +263,7 @@ void ActuatorEffectivenessTiltrotorVTOL::getUnallocatedControl(int matrix_index,
 	}
 }
 
+// 判断电机是否已经转起来了，防止 tilt 提前动作
 bool ActuatorEffectivenessTiltrotorVTOL::throttleSpoolupFinished()
 {
 	vehicle_status_s vehicle_status;

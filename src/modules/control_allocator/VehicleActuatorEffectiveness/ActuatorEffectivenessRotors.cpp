@@ -118,10 +118,12 @@ void ActuatorEffectivenessRotors::updateParams()
 		if (_tilt_support) {
 			int32_t tilt_param{0};
 			param_get(_param_handles[i].tilt_index, &tilt_param);
-			_geometry.rotors[i].tilt_index = tilt_param - 1;
+			_geometry.rotors[i].tilt_index_roll = tilt_param - 1;
+			_geometry.rotors[i].tilt_index_pitch = tilt_param - 1;
 
 		} else {
-			_geometry.rotors[i].tilt_index = -1;
+			_geometry.rotors[i].tilt_index_roll = -1;
+			_geometry.rotors[i].tilt_index_pitch = -1;
 		}
 	}
 }

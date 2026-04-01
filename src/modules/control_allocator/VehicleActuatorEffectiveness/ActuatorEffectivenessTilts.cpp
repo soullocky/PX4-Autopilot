@@ -46,6 +46,8 @@ ActuatorEffectivenessTilts::ActuatorEffectivenessTilts(ModuleParams *parent)
 		char buffer[17];
 		snprintf(buffer, sizeof(buffer), "CA_SV_TL%u_CT", i);
 		_param_handles[i].control = param_find(buffer);
+		snprintf(buffer, sizeof(buffer), "CA_SV_TL%u_AX", i);
+    		_param_handles[i].axis = param_find(buffer);          // 新增
 		snprintf(buffer, sizeof(buffer), "CA_SV_TL%u_MINA", i);
 		_param_handles[i].min_angle = param_find(buffer);
 		snprintf(buffer, sizeof(buffer), "CA_SV_TL%u_MAXA", i);
@@ -73,6 +75,7 @@ void ActuatorEffectivenessTilts::updateParams()
 
 	for (int i = 0; i < count; i++) {
 		param_get(_param_handles[i].control, (int32_t *)&_params[i].control);
+		param_get(_param_handles[i].axis, (int32_t *)&_params[i].axis);  // 新增
 		param_get(_param_handles[i].tilt_direction, (int32_t *)&_params[i].tilt_direction);
 		param_get(_param_handles[i].min_angle, &_params[i].min_angle);
 		param_get(_param_handles[i].max_angle, &_params[i].max_angle);
@@ -96,34 +99,73 @@ bool ActuatorEffectivenessTilts::addActuators(Configuration &configuration)
 void ActuatorEffectivenessTilts::updateTorqueSign(const ActuatorEffectivenessRotors::Geometry &geometry,
 		bool disable_pitch)
 {
+	// 保险起见：先清零
+	for (int i = 0; i < _count; i++) {
+		_torque[i].setAll(0.f);
+	}
+
 	for (int i = 0; i < geometry.num_rotors; ++i) {
-		int tilt_index = geometry.rotors[i].tilt_index;
 
-		if (tilt_index == -1 || tilt_index >= _count) {
-			continue;
-		}
+	const auto &rotor = geometry.rotors[i];
 
-		if (_params[tilt_index].control == Control::Yaw || _params[tilt_index].control == Control::YawAndPitch) {
+        // ================ 1) pitch-like tilt（前后倾：pitch / yaw） ====================
+	{
+            const int tilt_index = rotor.tilt_index_pitch;
 
-			// Find the yaw torque sign by checking the motor position and tilt direction.
-			// Rotate position by -tilt_direction around z, then check the sign of y pos
-			float tilt_direction = math::radians((float)_params[tilt_index].tilt_direction);
-			Vector3f rotated_pos = Dcmf{Eulerf{0.f, 0.f, -tilt_direction}} * geometry.rotors[i].position;
+            if (tilt_index >= 0 && tilt_index < _count
+                && _params[tilt_index].axis == TiltAxis::PitchLike) {
 
-			if (rotated_pos(1) < -0.01f) { // add minimal margin
-				_torque[tilt_index](2) = 1.f;
+                // ---- yaw 符号：沿用原来的旋转 + y 判号逻辑 ----
+                if (_params[tilt_index].control == Control::Yaw
+                    || _params[tilt_index].control == Control::YawAndPitch) {
 
-			} else if (rotated_pos(1) > 0.01f) {
-				_torque[tilt_index](2) = -1.f;
-			}
-		}
+                    const float tilt_direction = math::radians((float)_params[tilt_index].tilt_direction);
+                    matrix::Vector3f rotated_pos = matrix::Dcmf{matrix::Eulerf{0.f, 0.f, -tilt_direction}} * rotor.position;
 
-		if (!disable_pitch && (_params[tilt_index].control == Control::Pitch
-				       || _params[tilt_index].control == Control::YawAndPitch)) {
-			bool tilting_forwards = (int)_params[tilt_index].tilt_direction < 90 || (int)_params[tilt_index].tilt_direction > 270;
-			_torque[tilt_index](1) = tilting_forwards ? -1.f : 1.f;
-		}
+                    if (rotated_pos(1) < -0.01f) {
+                        _torque[tilt_index](2) = 1.f;    // +control -> +yaw
+                    } else if (rotated_pos(1) > 0.01f) {
+                        _torque[tilt_index](2) = -1.f;   // +control -> -yaw
+                    }
+                }
 
+                // ---- pitch 符号：沿用原逻辑，通过 tilt_direction 判断前/后 ----
+                if (!disable_pitch && (_params[tilt_index].control == Control::Pitch
+                                       || _params[tilt_index].control == Control::YawAndPitch)) {
+
+                    const int tilt_dir_deg = (int)_params[tilt_index].tilt_direction;
+                    const bool tilting_forwards = (tilt_dir_deg < 90 || tilt_dir_deg > 270);
+                    _torque[tilt_index](1) = tilting_forwards ? -1.f : 1.f;
+                }
+            }
+
+	}
+        // ================ 2) roll-like tilt（左右倾：roll） ===========================
+	{
+            const int tilt_index = rotor.tilt_index_roll;
+
+            if (tilt_index >= 0 && tilt_index < _count
+                && _params[tilt_index].axis == TiltAxis::RollLike) {
+
+                if (_params[tilt_index].control == Control::Roll
+                    || _params[tilt_index].control == Control::RollAndPitch) {
+
+                    // 用 rotor.position.y 判断左右：
+                    // y > 0 → 右侧电机，+control -> +roll；
+                    // y < 0 → 左侧电机，+control -> -roll。
+                    const float y = rotor.position(1);
+
+                    if (y > 0.01f) {
+                        _torque[tilt_index](0) = 1.f;    // 右侧：+control -> +roll
+                    } else if (y < -0.01f) {
+                        _torque[tilt_index](0) = -1.f;   // 左侧：+control -> -roll
+                    }
+                }
+
+                // 如要 roll-like 也帮忙 pitch / yaw，可以在这里设置 _torque(1/2)
+            }
+
+        }
 	}
 }
 

@@ -1,0 +1,82 @@
+#!/bin/sh
+#
+# @name Tiltquad
+#
+# @class Copter
+# @type Tricopter Y+
+#
+# @output Motor1 motor 1
+# @output Motor2 motor 2
+# @output Motor3 motor 3
+# @output Motor3 motor 4
+# @output Servo1 roll servo
+# @output Servo2 pitch servo
+# @output Servo3 roll servo
+# @output Servo4 pitch servo
+# @output Servo5 roll servo
+# @output Servo6 pitch servo
+# @output Servo7 roll servo
+# @output Servo8 pitch servo
+#
+# @board bitcraze_crazyflie exclude
+# @board px4_fmu-v2 exclude
+#
+
+. ${R}etc/init.d/rc.mc_defaults
+
+param set-default MAV_TYPE 19
+
+param set-default CA_AIRFRAME 15
+# Tricopter
+param set-default CA_ROTOR0_PX 0.127
+param set-default CA_ROTOR0_PY 0.127
+param set-default CA_ROTOR1_PX -0.127
+param set-default CA_ROTOR1_PY -0.127
+param set-default CA_ROTOR2_PX 0.127
+param set-default CA_ROTOR2_PY -0.127
+param set-default CA_ROTOR3_PX -0.127
+param set-default CA_ROTOR3_PY 0.127
+param set-default CA_ROTOR2_TILT 1
+param set-default CA_ROTOR_COUNT 3
+
+param set-default CA_SV_TL_COUNT = 8
+# Servo0
+param set-default CA_SV_TL0_CT = 4    # Roll
+param set-default CA_SV_TL0_AX = 1
+param set-default CA_SV_TL0_MAXA 90
+param set-default CA_SV_TL0_MINA -90
+# Servo1
+param set-default CA_SV_TL1_CT = 3    # YawAndPitch
+param set-default CA_SV_TL1_AX = 0
+param set-default CA_SV_TL1_MAXA 90
+param set-default CA_SV_TL1_MINA -90
+# Servo2
+param set-default CA_SV_TL2_CT = 4
+param set-default CA_SV_TL2_AX = 1
+param set-default CA_SV_TL2_MAXA 90
+param set-default CA_SV_TL2_MINA -90
+# Servo3
+param set-default CA_SV_TL3_CT = 3
+param set-default CA_SV_TL3_AX = 0
+param set-default CA_SV_TL3_MAXA 90
+param set-default CA_SV_TL3_MINA -90
+# Servo4
+param set-default CA_SV_TL4_CT = 4
+param set-default CA_SV_TL4_AX = 1
+param set-default CA_SV_TL4_MAXA 90
+param set-default CA_SV_TL4_MINA -90
+# Servo5
+param set-default CA_SV_TL5_CT = 3
+param set-default CA_SV_TL5_AX = 0
+param set-default CA_SV_TL5_MAXA 90
+param set-default CA_SV_TL5_MINA -90
+# Servo6
+param set-default CA_SV_TL6_CT = 4
+param set-default CA_SV_TL6_AX = 1
+param set-default CA_SV_TL6_MAXA 90
+param set-default CA_SV_TL6_MINA -90
+# Servo7
+param set-default CA_SV_TL7_CT = 3
+param set-default CA_SV_TL7_AX = 0
+param set-default CA_SV_TL7_MAXA 90
+param set-default CA_SV_TL7_MINA -90

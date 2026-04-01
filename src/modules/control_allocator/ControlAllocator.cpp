@@ -225,6 +225,10 @@ ControlAllocator::update_effectiveness_source()
 			tmp = new ActuatorEffectivenessTiltrotorVTOL(this);
 			break;
 
+		case EffectivenessSource::TILTQUAD:		// 新加倾转四旋翼
+			tmp = new ActuatorEffectivenessTiltquad(this);
+			break;
+
 		case EffectivenessSource::TAILSITTER_VTOL:
 			tmp = new ActuatorEffectivenessTailsitterVTOL(this);
 			break;
