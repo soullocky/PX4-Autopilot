@@ -238,6 +238,34 @@ parameters:
             num_instances: *max_num_mc_motors
             instance_start: 0
             default: 0
+        CA_ROTOR${i}_TR:
+            description:
+                short: Rotor ${i} roll tilt index
+                long: Index of roll-like tilt servo used by rotor ${i}.
+            type: enum
+            values:
+                0: 'Unused'
+                1: 'Roll 0'
+                2: 'Roll 1'
+                3: 'Roll 2'
+                4: 'Roll 3'
+            num_instances: *max_num_mc_motors
+            instance_start: 0
+            default: 0
+        CA_ROTOR${i}_TP:
+            description:
+                short: Rotor ${i} pitch tilt index
+                long: Index of pitch-like tilt servo used by rotor ${i}.
+            type: enum
+            values:
+                0: 'Unused'
+                1: 'Pitch 0'
+                2: 'Pitch 1'
+                3: 'Pitch 2'
+                4: 'Pitch 3'
+            num_instances: *max_num_mc_motors
+            instance_start: 0
+            default: 0
 
         # control surfaces
         CA_SV_CS_COUNT:

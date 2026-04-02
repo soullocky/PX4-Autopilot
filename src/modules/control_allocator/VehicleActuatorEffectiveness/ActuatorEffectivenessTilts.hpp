@@ -42,7 +42,7 @@ class ActuatorEffectivenessTilts : public ModuleParams, public ActuatorEffective
 {
 public:
 
-	static constexpr int MAX_COUNT = 4;
+	static constexpr int MAX_COUNT = 8;
 
 	enum class Control : int32_t {
 		// This matches with the parameter

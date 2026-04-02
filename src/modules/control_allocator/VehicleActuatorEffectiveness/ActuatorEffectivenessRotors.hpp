@@ -67,9 +67,8 @@ public:
 		matrix::Vector3f axis;
 		float thrust_coef;
 		float moment_ratio;
-		int tilt_index;
-		int tilt_index_roll;
-		int tilt_index_pitch;
+		int tilt_index_roll;		// 对应 CA_ROTORx_TR，-1 表示未使用
+		int tilt_index_pitch;		// 对应 CA_ROTORx_TP，-1 表示未使用
 	};
 
 	struct Geometry {
@@ -146,7 +145,9 @@ private:
 		param_t axis_z;
 		param_t thrust_coef;
 		param_t moment_ratio;
-		param_t tilt_index;
+		// 新增：分别对应 roll / pitch 的 tilt 参数
+		param_t tilt_index_roll;   // CA_ROTORx_TR
+    		param_t tilt_index_pitch;  // CA_ROTORx_TP
 	};
 	ParamHandles _param_handles[NUM_ROTORS_MAX];
 

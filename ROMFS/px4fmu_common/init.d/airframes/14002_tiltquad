@@ -23,22 +23,34 @@
 #
 
 . ${R}etc/init.d/rc.mc_defaults
-
-param set-default MAV_TYPE 19
-
+# MAV_TYPE_QUADROTOR
+param set-default MAV_TYPE 2
+# 自定义Tiltquad
 param set-default CA_AIRFRAME 15
-# Tricopter
+# Rotors
+param set-default CA_ROTOR_COUNT 4
+# Rotor1
 param set-default CA_ROTOR0_PX 0.127
 param set-default CA_ROTOR0_PY 0.127
+param set-default CA_ROTOR0_TR = 1
+param set-default CA_ROTOR0_TP = 2
+# Rotor2
 param set-default CA_ROTOR1_PX -0.127
 param set-default CA_ROTOR1_PY -0.127
+param set-default CA_ROTOR0_TR = 3
+param set-default CA_ROTOR0_TP = 4
+# Rotor3
 param set-default CA_ROTOR2_PX 0.127
 param set-default CA_ROTOR2_PY -0.127
+param set-default CA_ROTOR0_TR = 5
+param set-default CA_ROTOR0_TP = 6
+# Rotor4
 param set-default CA_ROTOR3_PX -0.127
 param set-default CA_ROTOR3_PY 0.127
-param set-default CA_ROTOR2_TILT 1
-param set-default CA_ROTOR_COUNT 3
+param set-default CA_ROTOR0_TR = 7
+param set-default CA_ROTOR0_TP = 8
 
+# Servos
 param set-default CA_SV_TL_COUNT = 8
 # Servo0
 param set-default CA_SV_TL0_CT = 4    # Roll
