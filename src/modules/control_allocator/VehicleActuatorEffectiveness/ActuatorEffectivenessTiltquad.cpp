@@ -46,6 +46,8 @@ using namespace matrix;
 // 初始化三个子模块
 ActuatorEffectivenessTiltquad::ActuatorEffectivenessTiltquad(ModuleParams *parent)
 	: ModuleParams(parent),
+          _param_flight_mode_handle(param_find("CA_TILTQUAD_MODE")),
+          _param_max_tilt_angle_handle(param_find("CA_TILTQUAD_MAX_TILT")),
 	  _mc_rotors(this, ActuatorEffectivenessRotors::AxisConfiguration::FixedUpwards, true),
 	  _tilts(this)
 {
@@ -94,6 +96,13 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 	actuator_sp += _tilt_offsets;
 	// TODO: dynamic matrix update
 
+
+	// Route to flight mode-specific control logic
+	if (_current_flight_mode == FlightMode::MODE1_FIXED_POSITION_ATTITUDE_CHANGE) {
+		applyMode1Control(actuator_sp, actuator_min, actuator_max, control_sp);
+	} else if (_current_flight_mode == FlightMode::MODE2_FIXED_ATTITUDE_POSITION_CHANGE) {
+		applyMode2Control(actuator_sp, actuator_min, actuator_max);
+	}
 	bool yaw_saturated_positive = true;
 	bool yaw_saturated_negative = true;
 
@@ -126,6 +135,75 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 }
 
 // 向控制器反馈 Yaw 是否已经饱和（用于rate controller anti-windup）
+
+// Mode 1: Fixed Position, Attitude Change via Tilt
+// RC roll/pitch directly control the corresponding tilt angles (±90°)
+void ActuatorEffectivenessTiltquad::applyMode1Control(
+	ActuatorVector &actuator_sp,
+	const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+	const matrix::Vector<float, NUM_ACTUATORS> &actuator_max,
+	const matrix::Vector<float, NUM_AXES> &control_sp)
+{
+	// Map RC roll/pitch commands [-1, 1] directly to tilt angles [-90°, +90°]
+	// This enables non-zero attitude hover with direct manual control
+	_target_attitude_roll = control_sp(ControlAxis::ROLL) * _max_tilt_angle;
+	_target_attitude_pitch = control_sp(ControlAxis::PITCH) * _max_tilt_angle;
+
+	// Constrain to ±max_tilt_angle
+	_target_attitude_roll = math::constrain(_target_attitude_roll, -_max_tilt_angle, _max_tilt_angle);
+	_target_attitude_pitch = math::constrain(_target_attitude_pitch, -_max_tilt_angle, _max_tilt_angle);
+
+	// Apply tilt angles to all rotors: pitch to pitch channels, roll to yaw channels
+	// This creates coordinated tilting for attitude control while maintaining position
+	for (int i = 0; i < _tilts.count(); ++i) {
+		int pitch_idx = _first_tilt_idx + 2 * i;
+		int yaw_idx = _first_tilt_idx + 2 * i + 1;
+
+		if (pitch_idx < NUM_ACTUATORS && yaw_idx < NUM_ACTUATORS) {
+			// Normalize angles to [-1, 1] servo range
+			actuator_sp(pitch_idx) = _target_attitude_pitch / _max_tilt_angle;
+			actuator_sp(yaw_idx) = _target_attitude_roll / _max_tilt_angle;
+
+			// Apply saturation
+			actuator_sp(pitch_idx) = math::constrain(actuator_sp(pitch_idx), actuator_min(pitch_idx), actuator_max(pitch_idx));
+			actuator_sp(yaw_idx) = math::constrain(actuator_sp(yaw_idx), actuator_min(yaw_idx), actuator_max(yaw_idx));
+		}
+	}
+}
+
+// Mode 2: Fixed Attitude, Position Change via Tilt Variation
+// RC roll/pitch sticks control position (forward/back/left/right)
+// Tilts are limited to small angles to maintain stable attitude
+void ActuatorEffectivenessTiltquad::applyMode2Control(
+	ActuatorVector &actuator_sp,
+	const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+	const matrix::Vector<float, NUM_ACTUATORS> &actuator_max)
+{
+	// Lock tilt angles to near-zero (±5°) to maintain stable hover attitude
+	// RC roll/pitch commands adjust differential thrust between rotors for position control
+	float fixed_tilt_angle = 5.0f * (float)M_PI / 180.0f;  // 5 degrees max deviation
+	float normalized_fixed_tilt = fixed_tilt_angle / _max_tilt_angle;
+
+	// Note: In Mode 2, the base effectiveness matrix already provides position control
+	// via the thruster allocation. We just need to limit tilt to maintain attitude.
+	// The control_sp signals for thrust and position are handled by the main allocator.
+
+	for (int i = 0; i < _tilts.count(); ++i) {
+		int pitch_idx = _first_tilt_idx + 2 * i;
+		int yaw_idx = _first_tilt_idx + 2 * i + 1;
+
+		if (pitch_idx < NUM_ACTUATORS && yaw_idx < NUM_ACTUATORS) {
+			// Constrain tilt angles to ±5° deviation to maintain attitude stability
+			actuator_sp(pitch_idx) = math::constrain(actuator_sp(pitch_idx), -normalized_fixed_tilt, normalized_fixed_tilt);
+			actuator_sp(yaw_idx) = math::constrain(actuator_sp(yaw_idx), -normalized_fixed_tilt, normalized_fixed_tilt);
+
+			// Ensure within actuator bounds
+			actuator_sp(pitch_idx) = math::constrain(actuator_sp(pitch_idx), actuator_min(pitch_idx), actuator_max(pitch_idx));
+			actuator_sp(yaw_idx) = math::constrain(actuator_sp(yaw_idx), actuator_min(yaw_idx), actuator_max(yaw_idx));
+		}
+	}
+}
+
 void ActuatorEffectivenessTiltquad::getUnallocatedControl(int matrix_index, control_allocator_status_s &status)
 {
 	// Note: the values '-1', '1' and '0' are just to indicate a negative,

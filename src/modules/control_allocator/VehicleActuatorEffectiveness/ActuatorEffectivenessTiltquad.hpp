@@ -44,10 +44,24 @@
 #include "control_allocation/actuator_effectiveness/ActuatorEffectiveness.hpp"
 #include "ActuatorEffectivenessRotors.hpp"
 #include "ActuatorEffectivenessTilts.hpp"
+#include <uORB/topics/tiltrotor_extra_controls.h>
+#include <uORB/Subscription.hpp>
 
 class ActuatorEffectivenessTiltquad : public ModuleParams, public ActuatorEffectiveness
 {
 public:
+
+
+/**
+ * @enum FlightMode
+ * Flight mode selection for tiltquad
+ * Mode1: Fixed position, attitude control - change attitude to achieve non-zero attitude hover
+ * Mode2: Fixed attitude, position control - change position with fixed or limited tilt
+ */
+enum class FlightMode : int32_t {
+MODE1_FIXED_POSITION_ATTITUDE_CHANGE = 0,  // Fixed position, attitude control via tilts
+MODE2_FIXED_ATTITUDE_POSITION_CHANGE = 1,  // Fixed attitude, position control via motors
+};
 
 	ActuatorEffectivenessTiltquad(ModuleParams *parent);
 	virtual ~ActuatorEffectivenessTiltquad() = default;
@@ -73,6 +87,29 @@ public:
 	void getUnallocatedControl(int matrix_index, control_allocator_status_s &status) override;
 
 protected:
+
+// Flight mode control and state tracking
+FlightMode _current_flight_mode{FlightMode::MODE1_FIXED_POSITION_ATTITUDE_CHANGE};
+float _target_attitude_pitch{0.0f};  // Target pitch angle for mode1 (±90°)
+float _target_attitude_roll{0.0f};   // Target roll angle for mode1 (±90°)
+float _max_tilt_angle{90.0f};        // Max tilt angle constraint for both modes (degrees, ±90°)
+
+	// uORB subscription for extra controls
+	uORB::Subscription _tiltrotor_extra_controls_sub{ORB_ID(tiltrotor_extra_controls)};
+
+// Parameter handles
+param_t _param_flight_mode_handle;
+param_t _param_max_tilt_angle_handle;
+
+
+        // Flight mode-specific control methods
+        void applyMode1Control(ActuatorVector &actuator_sp,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_max,
+                const matrix::Vector<float, NUM_AXES> &control_sp);
+        void applyMode2Control(ActuatorVector &actuator_sp,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_max);
 	ActuatorVector _tilt_offsets;
 	ActuatorEffectivenessRotors _mc_rotors;
 	ActuatorEffectivenessTilts _tilts;
