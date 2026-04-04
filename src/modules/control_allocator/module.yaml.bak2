@@ -636,55 +636,6 @@ parameters:
                 1: Remove first failed motor from effectiveness
             default: 0
 
-    - group: Tiltquad
-      definitions:
-        CA_TILTQUAD_MODE:
-            description:
-                short: Tiltquad flight mode
-                long: |
-                  Selects the flight mode for dual-mode tiltquad:
-                  0: MODE1 - Fixed position, attitude change via tilt (±90°)
-                  1: MODE2 - Fixed attitude, position change via thrust differential (±5° tilt lock)
-            type: enum
-            values:
-                0: "MODE1: ±90° Free Tilt (RC Direct Control)"
-                1: "MODE2: ±5° Tilt Lock + Position Control"
-            default: 0
-
-        CA_TILT_MAX_ANG:
-            description:
-                short: Maximum tilt angle for MODE2
-                long: |
-                  Defines the maximum allowed tilt angle when flying in MODE2.
-                  This parameter is ignored in MODE1 (which allows ±90°).
-                  Typical value: 5-15 degrees for stable attitude lock.
-            type: float
-            unit: deg
-            min: 0
-            max: 90
-            default: 5
-
-        CA_TILT_RC_CHN:
-            description:
-                short: RC channel for tiltquad mode switching
-                long: |
-                  Select which RC channel switches between MODE1 and MODE2.
-                  Low position: MODE1 (±90° free tilt)
-                  High position: MODE2 (±5° tilt lock + position control)
-                  0 = Disabled (use CA_TILTQUAD_MODE parameter instead)
-            type: enum
-            values:
-                0: "Disabled (use parameter)"
-                1: "RC Channel 1 (roll)"
-                2: "RC Channel 2 (pitch)"
-                3: "RC Channel 3 (yaw)"
-                4: "RC Channel 4 (throttle)"
-                5: "RC Channel 5 (aux1)"
-                6: "RC Channel 6 (aux2)"
-                7: "RC Channel 7 (aux3)"
-                8: "RC Channel 8 (aux4)"
-            default: 0
-
 # Mixer
 mixer:
     actuator_types:

@@ -46,10 +46,7 @@
 #include "ActuatorEffectivenessTilts.hpp"
 #include <uORB/topics/tiltrotor_extra_controls.h>
 #include <uORB/topics/manual_control_setpoint.h>
-#include <uORB/topics/vehicle_status.h>
 #include <uORB/Subscription.hpp>
-#include <uORB/topics/manual_control_setpoint.h>
-#include <uORB/topics/vehicle_status.h>
 
 class ActuatorEffectivenessTiltquad : public ModuleParams, public ActuatorEffectiveness
 {
@@ -101,9 +98,7 @@ float _max_tilt_angle{90.0f};        // Max tilt angle constraint for both modes
 	// uORB subscription for extra controls
 	uORB::Subscription _tiltrotor_extra_controls_sub{ORB_ID(tiltrotor_extra_controls)};
 	uORB::Subscription _manual_control_sub{ORB_ID(manual_control_setpoint)};
- uORB::SubscriptionData<vehicle_status_s> _vehicle_status_sub{ORB_ID(vehicle_status)};
- uint8_t _current_nav_state{0};
-
+	uint8_t _rc_switch_channel{0};
 
 // Parameter handles
 param_t _param_flight_mode_handle;
@@ -111,6 +106,14 @@ param_t _param_max_tilt_angle_handle;
 param_t _param_rc_switch_channel;
 
 
+        // Flight mode-specific control methods
+        void applyMode1Control(ActuatorVector &actuator_sp,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_max,
+                const matrix::Vector<float, NUM_AXES> &control_sp);
+        void applyMode2Control(ActuatorVector &actuator_sp,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_max);
 	ActuatorVector _tilt_offsets;
 	ActuatorEffectivenessRotors _mc_rotors;
 	ActuatorEffectivenessTilts _tilts;
