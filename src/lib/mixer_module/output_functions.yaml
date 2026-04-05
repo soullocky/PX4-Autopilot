@@ -43,6 +43,16 @@ functions:
     IC_Engine_Choke: 452
     IC_Engine_Starter: 453
 
+    # Tiltquad VTOL tilt servos
+    Tilt_Roll:
+      start: 501
+      count: 4
+      note: "Tilt servo for roll (X-axis) rotation. Servo output for Tilt 1-4 Roll"
+    Tilt_Pitch:
+      start: 505
+      count: 4
+      note: "Tilt servo for pitch (Y-axis) rotation. Servo output for Tilt 1-4 Pitch"
+
     # Add your own here:
     #MyCustomFunction: 10000
 
