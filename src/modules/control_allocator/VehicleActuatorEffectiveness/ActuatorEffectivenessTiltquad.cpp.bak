@@ -48,7 +48,6 @@ ActuatorEffectivenessTiltquad::ActuatorEffectivenessTiltquad(ModuleParams *paren
 	: ModuleParams(parent),
           _param_flight_mode_handle(param_find("CA_TILTQUAD_MODE")),
           _param_max_tilt_angle_handle(param_find("CA_TILTQUAD_MAX_TILT")),
-          _param_rc_switch_channel(param_find("CA_TILTQUAD_RC_SWITCH")),
 	  _mc_rotors(this, ActuatorEffectivenessRotors::AxisConfiguration::FixedUpwards, true),
 	  _tilts(this)
 {
@@ -94,6 +93,18 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 				    int matrix_index, ActuatorVector &actuator_sp, const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
 				    const matrix::Vector<float, NUM_ACTUATORS> &actuator_max)
 {
+	// Update parameters from PX4 parameter system
+	ModuleParams::updateParams();
+
+	// Read parameter values
+	int32_t flight_mode_param = 0;
+	param_get(_param_flight_mode_handle, &flight_mode_param);
+	_current_flight_mode = (FlightMode)flight_mode_param;
+
+	float max_tilt_angle_param = 90.0f;
+	param_get(_param_max_tilt_angle_handle, &max_tilt_angle_param);
+	_max_tilt_angle = max_tilt_angle_param * (float)M_PI / 180.0f;  // Convert to radians
+
 	actuator_sp += _tilt_offsets;
 	// TODO: dynamic matrix update
 
@@ -154,6 +165,10 @@ void ActuatorEffectivenessTiltquad::applyMode1Control(
 	_target_attitude_roll = math::constrain(_target_attitude_roll, -_max_tilt_angle, _max_tilt_angle);
 	_target_attitude_pitch = math::constrain(_target_attitude_pitch, -_max_tilt_angle, _max_tilt_angle);
 
+// Compute normalized demands once (avoid repeated divisions in loop)
+float pitch_demand = _target_attitude_pitch / _max_tilt_angle;
+float roll_demand = _target_attitude_roll / _max_tilt_angle;
+
 	// Apply tilt angles to all rotors: pitch to pitch channels, roll to yaw channels
 	// This creates coordinated tilting for attitude control while maintaining position
 	for (int i = 0; i < _tilts.count(); ++i) {
@@ -161,9 +176,9 @@ void ActuatorEffectivenessTiltquad::applyMode1Control(
 		int yaw_idx = _first_tilt_idx + 2 * i + 1;
 
 		if (pitch_idx < NUM_ACTUATORS && yaw_idx < NUM_ACTUATORS) {
-			// Normalize angles to [-1, 1] servo range
-			actuator_sp(pitch_idx) = _target_attitude_pitch / _max_tilt_angle;
-			actuator_sp(yaw_idx) = _target_attitude_roll / _max_tilt_angle;
+			// Normalize angles to [-1, 1] servo range (use cached values)
+			actuator_sp(pitch_idx) = pitch_demand;
+			actuator_sp(yaw_idx) = roll_demand;
 
 			// Apply saturation
 			actuator_sp(pitch_idx) = math::constrain(actuator_sp(pitch_idx), actuator_min(pitch_idx), actuator_max(pitch_idx));

@@ -37,29 +37,29 @@ param set-default CA_ROTOR_COUNT 4
 # Motor 1 (Front-Left)
 param set-default CA_ROTOR0_PX 0.127
 param set-default CA_ROTOR0_PY 0.127
-param set-default CA_ROTOR0_TR = 1
-param set-default CA_ROTOR0_TP = 1
+param set-default CA_ROTOR0_TR 1
+param set-default CA_ROTOR0_TP 1
 # Rotor2
 param set-default CA_ROTOR1_PX -0.127
 param set-default CA_ROTOR1_PY -0.127
-param set-default CA_ROTOR1_TR = 2
-param set-default CA_ROTOR1_TP = 2
+param set-default CA_ROTOR1_TR 2
+param set-default CA_ROTOR1_TP 2
 # Rotor3
 param set-default CA_ROTOR2_PX 0.127
 param set-default CA_ROTOR2_PY -0.127
-param set-default CA_ROTOR2_TR = 3
-param set-default CA_ROTOR2_TP = 3
+param set-default CA_ROTOR2_TR 3
+param set-default CA_ROTOR2_TP 3
 # Rotor4
 param set-default CA_ROTOR3_PX -0.127
 param set-default CA_ROTOR3_PY 0.127
-param set-default CA_ROTOR3_TR = 4
-param set-default CA_ROTOR3_TP = 4
+param set-default CA_ROTOR3_TR 4
+param set-default CA_ROTOR3_TP 4
 
 # Servos
-param set-default CA_SV_TL_COUNT = 8
+param set-default CA_SV_TL_COUNT 8
 # Servo0
-param set-default CA_SV_TL0_CT = 4    # Roll
-param set-default CA_SV_TL0_AX = 1
+param set-default CA_SV_TL0_CT 4    # Roll
+param set-default CA_SV_TL0_AX 1
 param set-default CA_SV_TL0_MAXA 90
 param set-default CA_SV_TL0_MINA -90
 param set-default CA_SV_TL0_MAXA 90

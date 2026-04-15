@@ -90,6 +90,24 @@ MODE2_FIXED_ATTITUDE_POSITION_CHANGE = 1,  // Fixed attitude, position control v
 
 	void getUnallocatedControl(int matrix_index, control_allocator_status_s &status) override;
 
+private:
+
+        // Servo rate limiting to prevent oscillation
+        void applySlewRateLimiting(ActuatorVector &actuator_sp,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_max);
+        
+        // Previous actuator setpoints for slew rate calculation
+        ActuatorVector _previous_actuator_sp{};
+        // Flight mode-specific control methods
+        void applyMode1Control(ActuatorVector &actuator_sp,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_max,
+                const matrix::Vector<float, NUM_AXES> &control_sp);
+        void applyMode2Control(ActuatorVector &actuator_sp,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+                const matrix::Vector<float, NUM_ACTUATORS> &actuator_max);
+
 protected:
 
 // Flight mode control and state tracking
