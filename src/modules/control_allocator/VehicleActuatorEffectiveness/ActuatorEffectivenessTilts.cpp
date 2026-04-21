@@ -110,7 +110,9 @@ void ActuatorEffectivenessTilts::updateTorqueSign(const ActuatorEffectivenessRot
 
         // ================ 1) pitch-like tilt（前后倾：pitch / yaw） ====================
 	{
-            const int tilt_index = rotor.tilt_index_pitch;
+            // Tiltquad uses 8 servos ordered as [roll0, pitch0, roll1, pitch1, ...].
+            // CA_ROTORx_TP stays in the 4-element pitch index space, so map it to odd servo slots.
+            const int tilt_index = rotor.tilt_index_pitch >= 0 ? rotor.tilt_index_pitch * 2 + 1 : -1;
 
             if (tilt_index >= 0 && tilt_index < _count
                 && _params[tilt_index].axis == TiltAxis::PitchLike) {
@@ -123,9 +125,9 @@ void ActuatorEffectivenessTilts::updateTorqueSign(const ActuatorEffectivenessRot
                     matrix::Vector3f rotated_pos = matrix::Dcmf{matrix::Eulerf{0.f, 0.f, -tilt_direction}} * rotor.position;
 
                     if (rotated_pos(1) < -0.01f) {
-                        _torque[tilt_index](2) = 1.f;    // +control -> +yaw
+                        _torque[tilt_index](2) = 0.25f;    // +control -> +yaw
                     } else if (rotated_pos(1) > 0.01f) {
-                        _torque[tilt_index](2) = -1.f;   // +control -> -yaw
+                        _torque[tilt_index](2) = -0.25f;   // +control -> -yaw
                     }
                 }
 
@@ -142,7 +144,8 @@ void ActuatorEffectivenessTilts::updateTorqueSign(const ActuatorEffectivenessRot
 	}
         // ================ 2) roll-like tilt（左右倾：roll） ===========================
 	{
-            const int tilt_index = rotor.tilt_index_roll;
+            // CA_ROTORx_TR stays in the 4-element roll index space, so map it to even servo slots.
+            const int tilt_index = rotor.tilt_index_roll >= 0 ? rotor.tilt_index_roll * 2 : -1;
 
             if (tilt_index >= 0 && tilt_index < _count
                 && _params[tilt_index].axis == TiltAxis::RollLike) {

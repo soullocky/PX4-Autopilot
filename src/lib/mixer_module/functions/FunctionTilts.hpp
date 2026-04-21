@@ -61,28 +61,23 @@ static FunctionProviderBase *allocate(const Context &context) { return new Funct
 
 void update() override { _topic.update(&_tilt_data); }
 
-float value(OutputFunction func) override 
-{ 
-// Map output function to tilt servo index
-// Tilt_Roll1-4: 501-504 → indices 0,2,4,6
-// Tilt_Pitch1-4: 505-508 → indices 1,3,5,7
+float value(OutputFunction func) override
+{
+	const int func_num = (int)func;
+	int index = -1;
 
-int func_num = (int)func;
-int index = -1;
+	if (func_num >= 501 && func_num <= 504) {
+		index = func_num - 501;
 
-if (func_num >= 501 && func_num <= 504) {
-// Tilt_Roll: maps to even indices (0,2,4,6)
-index = (func_num - 501) * 2;
-} else if (func_num >= 505 && func_num <= 508) {
-// Tilt_Pitch: maps to odd indices (1,3,5,7)
-index = (func_num - 505) * 2 + 1;
-}
+	} else if (func_num >= 505 && func_num <= 508) {
+		index = (func_num - 505) + 4;
+	}
 
-if (index >= 0 && index < actuator_servos_s::NUM_CONTROLS) {
-return _tilt_data.control[index];
-}
+	if (index >= 0 && index < actuator_servos_s::NUM_CONTROLS) {
+		return _tilt_data.control[index];
+	}
 
-return NAN;
+	return NAN;
 }
 
 uORB::SubscriptionCallbackWorkItem *subscriptionCallback() override { return &_topic; }

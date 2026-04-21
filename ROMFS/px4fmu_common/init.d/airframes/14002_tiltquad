@@ -5,18 +5,18 @@
 # @class Copter
 # @type Quadrotor with 2-DOF Tilt
 #
-# @output Motor1 motor 1 (Front-Left)
+# @output Motor1 motor 1 (Front-Right)
 # @output Motor2 motor 2 (Rear-Left)
-# @output Motor3 motor 3 (Front-Right)
+# @output Motor3 motor 3 (Front-Left)
 # @output Motor4 motor 4 (Rear-Right)
-# @output Servo1 M1 Roll Tilt Servo
-# @output Servo2 M1 Pitch Tilt Servo
-# @output Servo3 M2 Roll Tilt Servo
-# @output Servo4 M2 Pitch Tilt Servo
-# @output Servo5 M3 Roll Tilt Servo
-# @output Servo6 M3 Pitch Tilt Servo
-# @output Servo7 M4 Roll Tilt Servo
-# @output Servo8 M4 Pitch Tilt Servo
+# @output Servo1 M1 Roll Tilt Servo (TL0)
+# @output Servo2 M1 Pitch Tilt Servo (TL1)
+# @output Servo3 M2 Roll Tilt Servo (TL2)
+# @output Servo4 M2 Pitch Tilt Servo (TL3)
+# @output Servo5 M3 Roll Tilt Servo (TL4)
+# @output Servo6 M3 Pitch Tilt Servo (TL5)
+# @output Servo7 M4 Roll Tilt Servo (TL6)
+# @output Servo8 M4 Pitch Tilt Servo (TL7)
 #
 # @board bitcraze_crazyflie exclude
 # @board px4_fmu-v2 exclude
@@ -29,12 +29,12 @@ param set-default MAV_TYPE 2
 # 自定义Tiltquad
 param set-default CA_AIRFRAME 16
 
-param set-default CA_TILTQUAD_MAX_TILT 90
-
 # Rotors
+# Motor order: M1 Front-Right, M2 Rear-Left, M3 Front-Left, M4 Rear-Right
+# Servo order: TL0/TL1, TL2/TL3, TL4/TL5, TL6/TL7 = roll/pitch pairs for M1..M4
 param set-default CA_ROTOR_COUNT 4
 
-# Motor 1 (Front-Left)
+# Motor 1 (Front-Right)
 param set-default CA_ROTOR0_PX 0.127
 param set-default CA_ROTOR0_PY 0.127
 param set-default CA_ROTOR0_TR 1
@@ -56,73 +56,71 @@ param set-default CA_ROTOR3_TR 4
 param set-default CA_ROTOR3_TP 4
 
 # Servos
+# Tilt servo layout: [TL0 roll, TL1 pitch, TL2 roll, TL3 pitch, TL4 roll, TL5 pitch, TL6 roll, TL7 pitch]
 param set-default CA_SV_TL_COUNT 8
-# Servo0
+# TL0: M1 Roll Servo
 param set-default CA_SV_TL0_CT 4    # Roll
 param set-default CA_SV_TL0_AX 1
-param set-default CA_SV_TL0_MAXA 90
-param set-default CA_SV_TL0_MINA -90
-param set-default CA_SV_TL0_MAXA 90
+param set-default CA_SV_TL0_MINA -12
+param set-default CA_SV_TL0_MAXA 12
 param set-default CA_SV_TL0_TD 0
+param set-default CA_SV0_SLEW 1.5
 
 # M1 Pitch Servo (PWM 6)
 param set-default CA_SV_TL1_CT 2
 param set-default CA_SV_TL1_AX 0
-param set-default CA_SV_TL1_MINA -90
-param set-default CA_SV_TL1_MAXA 90
-param set-default CA_SV_TL1_TD 0
+param set-default CA_SV_TL1_MINA -12
+param set-default CA_SV_TL1_MAXA 12
+param set-default CA_SV_TL1_TD 90
+param set-default CA_SV1_SLEW 1.5
 
 # ---- Motor 2 Tilt Servos ----
 # M2 Roll Servo (PWM 7)
 param set-default CA_SV_TL2_CT 4
 param set-default CA_SV_TL2_AX 1
-param set-default CA_SV_TL2_MINA -90
-param set-default CA_SV_TL2_MAXA 90
+param set-default CA_SV_TL2_MINA -12
+param set-default CA_SV_TL2_MAXA 12
 param set-default CA_SV_TL2_TD 0
+param set-default CA_SV2_SLEW 1.5
 
 # M2 Pitch Servo (PWM 8)
 param set-default CA_SV_TL3_CT 2
 param set-default CA_SV_TL3_AX 0
-param set-default CA_SV_TL3_MINA -90
-param set-default CA_SV_TL3_MAXA 90
-param set-default CA_SV_TL3_TD 0
+param set-default CA_SV_TL3_MINA -12
+param set-default CA_SV_TL3_MAXA 12
+param set-default CA_SV_TL3_TD 90
+param set-default CA_SV3_SLEW 1.5
 
 # ---- Motor 3 Tilt Servos ----
 # M3 Roll Servo (PWM 9)
 param set-default CA_SV_TL4_CT 4
 param set-default CA_SV_TL4_AX 1
-param set-default CA_SV_TL4_MINA -90
-param set-default CA_SV_TL4_MAXA 90
+param set-default CA_SV_TL4_MINA -12
+param set-default CA_SV_TL4_MAXA 12
 param set-default CA_SV_TL4_TD 0
+param set-default CA_SV4_SLEW 1.5
 
 # M3 Pitch Servo (PWM 10)
 param set-default CA_SV_TL5_CT 2
 param set-default CA_SV_TL5_AX 0
-param set-default CA_SV_TL5_MINA -90
-param set-default CA_SV_TL5_MAXA 90
-param set-default CA_SV_TL5_TD 0
+param set-default CA_SV_TL5_MINA -12
+param set-default CA_SV_TL5_MAXA 12
+param set-default CA_SV_TL5_TD 90
+param set-default CA_SV5_SLEW 1.5
 
 # ---- Motor 4 Tilt Servos ----
 # M4 Roll Servo (PWM 11)
 param set-default CA_SV_TL6_CT 4
 param set-default CA_SV_TL6_AX 1
-param set-default CA_SV_TL6_MINA -90
-param set-default CA_SV_TL6_MAXA 90
+param set-default CA_SV_TL6_MINA -12
+param set-default CA_SV_TL6_MAXA 12
 param set-default CA_SV_TL6_TD 0
+param set-default CA_SV6_SLEW 1.5
 
 # M4 Pitch Servo (PWM 12)
 param set-default CA_SV_TL7_CT 2
 param set-default CA_SV_TL7_AX 0
-param set-default CA_SV_TL7_MINA -90
-param set-default CA_SV_TL7_MAXA 90
-param set-default CA_SV_TL7_TD 0
-
-# ==================== Tiltquad Specific Parameters ====================
-# Flight Mode: 0 = MODE1 (±90° free tilt), 1 = MODE2 (±5° tilt lock)
-param set-default CA_TILTQUAD_MODE 0
-
-# Maximum tilt angle for MODE2 (degrees)
-param set-default CA_TILT_MAX_ANG 5
-
-# RC Channel for mode switching (0 = disabled, 1-8 = RC channels)
-param set-default CA_TILT_RC_CHN 0
+param set-default CA_SV_TL7_MINA -12
+param set-default CA_SV_TL7_MAXA 12
+param set-default CA_SV_TL7_TD 90
+param set-default CA_SV7_SLEW 1.5

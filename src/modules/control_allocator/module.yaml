@@ -1329,5 +1329,3 @@ mixer:
                           - name: 'CA_SV_TL${i}_CT'
                             label: 'Use for Control'
 
-# Tiltquad Flight Modes (appended configuration)
-# This section is added at the end for Tiltquad dual-mode support
