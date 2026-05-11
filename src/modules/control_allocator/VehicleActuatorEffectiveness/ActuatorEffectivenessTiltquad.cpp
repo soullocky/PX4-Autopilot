@@ -84,6 +84,7 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 		const matrix::Vector<float, NUM_ACTUATORS> &actuator_max)
 {
 	actuator_sp += _tilt_offsets;
+	applyYawCoupledTiltFiltering(actuator_sp, actuator_min, actuator_max);		// 为舵机的偏航控制进行滤波处理，防止过快的偏航控制指令导致舵机过快的转动
 
 	bool yaw_saturated_positive = true;
 	bool yaw_saturated_negative = true;
@@ -111,6 +112,40 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 
 	_yaw_tilt_saturation_flags.tilt_yaw_neg = yaw_saturated_negative;
 	_yaw_tilt_saturation_flags.tilt_yaw_pos = yaw_saturated_positive;
+}
+
+void ActuatorEffectivenessTiltquad::applyYawCoupledTiltFiltering(ActuatorVector &actuator_sp,
+		const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+		const matrix::Vector<float, NUM_ACTUATORS> &actuator_max)
+{
+	constexpr float yaw_coupled_slew_step = 0.015f;
+	constexpr float other_tilt_slew_step = 0.05f;
+
+	for (int i = 0; i < _tilts.count(); ++i) {
+		const int servo_idx = _first_tilt_idx + i;
+
+		if (servo_idx >= NUM_ACTUATORS) {
+			continue;
+		}
+
+		const auto &tilt_cfg = _tilts.config(i);
+		const bool yaw_coupled_pitch_tilt = tilt_cfg.axis == ActuatorEffectivenessTilts::TiltAxis::PitchLike
+			&& tilt_cfg.control == ActuatorEffectivenessTilts::Control::YawAndPitch;
+		const float slew_step = yaw_coupled_pitch_tilt ? yaw_coupled_slew_step : other_tilt_slew_step;
+		const float desired = math::constrain(actuator_sp(servo_idx), actuator_min(servo_idx), actuator_max(servo_idx));
+
+		if (!_filtered_tilt_initialized) {
+			_filtered_tilt_sp(servo_idx) = desired;
+			continue;
+		}
+
+		const float delta = math::constrain(desired - _filtered_tilt_sp(servo_idx), -slew_step, slew_step);
+		_filtered_tilt_sp(servo_idx) = math::constrain(_filtered_tilt_sp(servo_idx) + delta,
+							 actuator_min(servo_idx), actuator_max(servo_idx));
+		actuator_sp(servo_idx) = _filtered_tilt_sp(servo_idx);
+	}
+
+	_filtered_tilt_initialized = true;
 }
 
 void ActuatorEffectivenessTiltquad::getUnallocatedControl(int matrix_index, control_allocator_status_s &status)

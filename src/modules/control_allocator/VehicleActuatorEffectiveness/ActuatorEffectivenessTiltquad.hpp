@@ -72,9 +72,15 @@ public:
 	void getUnallocatedControl(int matrix_index, control_allocator_status_s &status) override;
 
 protected:
+	void applyYawCoupledTiltFiltering(ActuatorVector &actuator_sp,
+				 const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
+				 const matrix::Vector<float, NUM_ACTUATORS> &actuator_max);
+
 	ActuatorVector _tilt_offsets;
 	ActuatorEffectivenessRotors _mc_rotors;
 	ActuatorEffectivenessTilts _tilts;
+	ActuatorVector _filtered_tilt_sp{};
+	bool _filtered_tilt_initialized{false};
 	int _first_tilt_idx{0};
 
 	struct YawTiltSaturationFlags {

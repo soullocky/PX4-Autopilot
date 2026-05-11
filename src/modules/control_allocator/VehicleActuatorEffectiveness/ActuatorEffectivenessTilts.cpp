@@ -125,9 +125,9 @@ void ActuatorEffectivenessTilts::updateTorqueSign(const ActuatorEffectivenessRot
                     matrix::Vector3f rotated_pos = matrix::Dcmf{matrix::Eulerf{0.f, 0.f, -tilt_direction}} * rotor.position;
 
                     if (rotated_pos(1) < -0.01f) {
-                        _torque[tilt_index](2) = 0.25f;    // +control -> +yaw
+                        _torque[tilt_index](2) = 1.f;    // +control -> +yaw
                     } else if (rotated_pos(1) > 0.01f) {
-                        _torque[tilt_index](2) = -0.25f;   // +control -> -yaw
+                        _torque[tilt_index](2) = -1.f;   // +control -> -yaw
                     }
                 }
 
