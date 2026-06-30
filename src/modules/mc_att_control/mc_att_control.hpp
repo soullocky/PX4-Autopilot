@@ -129,6 +129,8 @@ private:
 	bool _heading_good_for_control{true}; // initialized true to have heading lock when local position never published
 	float _unaided_heading{NAN}; // initialized NAN to not distract heading lock when local position never published
 	float _man_tilt_max{0.f};			/**< maximum tilt allowed for manual flight [rad] */
+	float _aux_roll_max{0.f};			/**< AUX5 通道控制的最大滚转角 [rad] */
+	float _aux_pitch_max{0.f};			/**< AUX6 通道控制的最大俯仰角 [rad] */
 
 	SlewRate<float> _manual_throttle_minimum{0.f}; ///< 0 when landed and ramped to MPC_MANTHR_MIN in air
 	SlewRate<float> _manual_throttle_maximum{0.f}; ///< 0 when disarmed ramped to 1 when spooled up
@@ -150,6 +152,10 @@ private:
 	DEFINE_PARAMETERS(
 		(ParamInt<px4::params::MC_AIRMODE>)         _param_mc_airmode,
 		(ParamFloat<px4::params::MC_MAN_TILT_TAU>)  _param_mc_man_tilt_tau,
+		// AUX 通道姿态目标输入相关参数：启用开关与 AUX5/AUX6 对应的最大滚转/俯仰角
+		(ParamInt<px4::params::MC_AUX_ATT_EN>)      _param_mc_aux_att_en,
+		(ParamFloat<px4::params::MC_AUX_ROLL_MAX>)  _param_mc_aux_roll_max,
+		(ParamFloat<px4::params::MC_AUX_PITCH_MAX>) _param_mc_aux_pitch_max,
 
 		(ParamFloat<px4::params::MC_ROLL_P>)        _param_mc_roll_p,
 		(ParamFloat<px4::params::MC_PITCH_P>)       _param_mc_pitch_p,

@@ -103,6 +103,9 @@ MulticopterAttitudeControl::parameters_updated()
 	}
 
 	_man_tilt_max = math::radians(_param_mpc_man_tilt_max.get());
+	// 将 AUX5/AUX6 对应的最大滚转/俯仰角参数（单位：度）转换为弧度后缓存
+	_aux_roll_max = math::radians(_param_mc_aux_roll_max.get());
+	_aux_pitch_max = math::radians(_param_mc_aux_pitch_max.get());
 }
 
 float
@@ -164,16 +167,41 @@ MulticopterAttitudeControl::generate_attitude_setpoint(const Quatf &q, float dt)
 	_man_roll_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
 	_man_pitch_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
 
-	// we want to fly towards the direction of (roll, pitch)
+	// ===== 摇杆部分: 决定期望"运动方向" =====
+	// 沿用 PX4 原始语义: 摇杆 (roll, pitch) 形成 2D 向量, 模长决定倾角大小,
+	// 方向决定水平运动方向。该部分独立限幅, 不被 AUX 偏置影响。
 	Vector2f v = Vector2f(_man_roll_input_filter.update(_manual_control_setpoint.roll * _man_tilt_max),
 			      -_man_pitch_input_filter.update(_manual_control_setpoint.pitch * _man_tilt_max));
-	float v_norm = v.norm(); // the norm of v defines the tilt angle
+
+	const float v_norm = v.norm(); // the norm of v defines the tilt angle
 
 	if (v_norm > _man_tilt_max) { // limit to the configured maximum tilt angle
 		v *= _man_tilt_max / v_norm;
 	}
 
-	Quatf q_sp_rp = AxisAnglef(v(0), v(1), 0.f);
+	// 摇杆驱动的旋转: 从水平姿态到摇杆指向的倾斜
+	Quatf q_rp_stick = AxisAnglef(v(0), v(1), 0.f);
+
+	// ===== AUX 偏置部分: 决定"悬停基础姿态" =====
+	// AUX5/AUX6 在中位时为单位四元数, 对最终姿态无影响
+	Quatf q_rp_aux(1.f, 0.f, 0.f, 0.f);
+
+	if (_param_mc_aux_att_en.get() != 0) {
+		const float roll_aux  = _manual_control_setpoint.aux5 * _aux_roll_max;
+		const float pitch_aux = -_manual_control_setpoint.aux6 * _aux_pitch_max;
+		q_rp_aux = AxisAnglef(roll_aux, pitch_aux, 0.f);
+	}
+
+	// ===== 四元数合成: q_aux ∘ q_stick =====
+	// 选择该顺序是为了让"摇杆驱动的旋转"和"AUX 偏置"在数学上保持独立的两个分量,
+	// 摇杆量程不会被 AUX 偏置压缩(各自独立产生四元数, 没有球形限幅冲突)。
+	// 注意:
+	//   - 姿态/自稳模式: 飞行加速度方向取决于最终合成姿态, 因此摇杆方向与
+	//     实际飞行方向并非真正独立 —— AUX 偏置会引起漂移, 飞手需主动补偿。
+	//   - 未来在位置模式中: 用同一种合成方式 q_sp = q_aux * q_pos_ctrl, 位置
+	//     控制器的反馈/积分会自动补偿 AUX 偏置导致的漂移, 此时摇杆方向才能
+	//     真正与 AUX 基础姿态独立。
+	Quatf q_sp_rp = q_rp_aux * q_rp_stick;
 	// Make sure there's a valid attitude quaternion with no yaw error when yaw is unlocked (NAN)
 	const float yaw_setpoint = PX4_ISFINITE(_yaw_setpoint_stabilized) ? _yaw_setpoint_stabilized : yaw;
 	// The axis angle can change the yaw as well (noticeable at higher tilt angles).

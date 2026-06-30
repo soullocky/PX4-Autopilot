@@ -147,6 +147,58 @@ PARAM_DEFINE_FLOAT(MC_PITCHRATE_MAX, 220.0f);
 PARAM_DEFINE_FLOAT(MC_YAWRATE_MAX, 200.0f);
 
 /**
+ * Enable AUX attitude target input
+ *
+ * When enabled, AUX5 and AUX6 act as an independent attitude bias composed
+ * (via quaternion multiplication) on top of the stick-driven roll/pitch
+ * setpoint. The stick range is therefore not compressed by the bias.
+ * In Manual/Stabilized mode the bias will still cause horizontal drift
+ * because attitude directly drives acceleration; in Position mode the
+ * position controller is expected to compensate this drift, fully
+ * decoupling stick direction from the bias.
+ *
+ * 使能 AUX 通道姿态目标输入。
+ * 置 1 时, AUX5/AUX6 作为独立的姿态偏置, 通过四元数乘法 q_sp = q_aux * q_stick
+ * 与摇杆姿态合成 —— 摇杆量程不会被 AUX 偏置压缩。
+ *   - 手动/自稳模式: 飞行方向由合成姿态决定, AUX 偏置会引起水平漂移,
+ *     飞手需自行补偿;
+ *   - 位置模式(后续扩展): 位置控制器会通过反馈/积分自动补偿偏置引起的
+ *     漂移, 从而摇杆方向真正与 AUX 基础姿态独立。
+ *
+ * @boolean
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_INT32(MC_AUX_ATT_EN, 0);
+
+/**
+ * Maximum roll angle commanded by AUX5
+ *
+ * AUX5 通道对应的最大滚转角，AUX5 满量程时对应的滚转角度。
+ *
+ * @unit deg
+ * @min 0
+ * @max 90
+ * @decimal 1
+ * @increment 1
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_FLOAT(MC_AUX_ROLL_MAX, 0.0f);
+
+/**
+ * Maximum pitch angle commanded by AUX6
+ *
+ * AUX6 通道对应的最大俯仰角，AUX6 满量程时对应的俯仰角度。
+ *
+ * @unit deg
+ * @min 0
+ * @max 90
+ * @decimal 1
+ * @increment 1
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_FLOAT(MC_AUX_PITCH_MAX, 0.0f);
+
+/**
  * Manual tilt input filter time constant
  *
  * Setting this parameter to 0 disables the filter
