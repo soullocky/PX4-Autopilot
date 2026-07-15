@@ -36,6 +36,7 @@
 #include "control_allocation/actuator_effectiveness/ActuatorEffectiveness.hpp"
 #include "ActuatorEffectivenessRotors.hpp"
 #include "ActuatorEffectivenessTilts.hpp"
+#include <matrix/matrix/PseudoInverse.hpp>
 
 class ActuatorEffectivenessMCTilt : public ModuleParams, public ActuatorEffectiveness
 {
@@ -58,21 +59,27 @@ public:
 	void updateSetpoint(const matrix::Vector<float, NUM_AXES> &control_sp, int matrix_index,
 			    ActuatorVector &actuator_sp, const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
 			    const matrix::Vector<float, NUM_ACTUATORS> &actuator_max) override;
+	void setAppliedSetpoint(int matrix_index, const ActuatorVector &actuator_sp) override;
 
 	const char *name() const override { return "MC Tilt"; }
 
 	void getUnallocatedControl(int matrix_index, control_allocator_status_s &status) override;
 
 protected:
+	using WrenchVector = matrix::Vector<float, NUM_AXES>;
+	using Jacobian = matrix::Matrix<float, NUM_AXES, NUM_ACTUATORS>;
+
+	WrenchVector computeWrench(const ActuatorVector &actuator) const;
+	void computeJacobian(const ActuatorVector &actuator, Jacobian &jacobian) const;
+	matrix::Vector3f rotorAxis(int rotor_index, const ActuatorVector &actuator) const;
+	float servoAngle(int servo_index, float setpoint) const;
+
 	ActuatorVector _tilt_offsets;
 	ActuatorEffectivenessRotors _mc_rotors;
 	ActuatorEffectivenessTilts _tilts;
+	ActuatorVector _nonlinear_sp{};
+	WrenchVector _requested_wrench{};
+	WrenchVector _achieved_wrench{};
+	bool _nonlinear_initialized{false};
 	int _first_tilt_idx{0};
-
-	struct YawTiltSaturationFlags {
-		bool tilt_yaw_pos;
-		bool tilt_yaw_neg;
-	};
-
-	YawTiltSaturationFlags _yaw_tilt_saturation_flags{};
 };

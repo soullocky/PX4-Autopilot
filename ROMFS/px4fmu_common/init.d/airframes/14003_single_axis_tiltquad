@@ -1,0 +1,66 @@
+#!/bin/sh
+#
+# @name Single-axis Tiltquad
+#
+# @class Copter
+# @type Quadrotor x
+#
+# @output Motor1 motor 1 (Front-Right)
+# @output Motor2 motor 2 (Rear-Left)
+# @output Motor3 motor 3 (Front-Left)
+# @output Motor4 motor 4 (Rear-Right)
+# @output Servo1 motor 1 tilt servo
+# @output Servo2 motor 2 tilt servo
+# @output Servo3 motor 3 tilt servo
+# @output Servo4 motor 4 tilt servo
+#
+# @board bitcraze_crazyflie exclude
+# @board px4_fmu-v2 exclude
+#
+
+. ${R}etc/init.d/rc.mc_defaults
+
+param set-default MAV_TYPE 2
+param set-default CA_AIRFRAME 8
+
+# 单轴倾转四旋翼：每个电机直接关联一个独立倾转舵机。
+param set-default CA_ROTOR_COUNT 4
+param set-default CA_ROTOR0_PX 0.127
+param set-default CA_ROTOR0_PY 0.127
+param set-default CA_ROTOR0_TILT 1
+param set-default CA_ROTOR1_PX -0.127
+param set-default CA_ROTOR1_PY -0.127
+param set-default CA_ROTOR1_TILT 2
+param set-default CA_ROTOR2_PX 0.127
+param set-default CA_ROTOR2_PY -0.127
+param set-default CA_ROTOR2_TILT 3
+param set-default CA_ROTOR3_PX -0.127
+param set-default CA_ROTOR3_PY 0.127
+param set-default CA_ROTOR3_TILT 4
+
+# 四个 PitchLike 舵机同时参与俯仰和偏航控制。
+param set-default CA_SV_TL_COUNT 4
+param set-default CA_SV_TL0_CT 3
+param set-default CA_SV_TL0_AX 0
+param set-default CA_SV_TL0_MINA -12
+param set-default CA_SV_TL0_MAXA 12
+param set-default CA_SV_TL0_TD 0
+param set-default CA_SV0_SLEW 1.5
+param set-default CA_SV_TL1_CT 3
+param set-default CA_SV_TL1_AX 0
+param set-default CA_SV_TL1_MINA -12
+param set-default CA_SV_TL1_MAXA 12
+param set-default CA_SV_TL1_TD 0
+param set-default CA_SV1_SLEW 1.5
+param set-default CA_SV_TL2_CT 3
+param set-default CA_SV_TL2_AX 0
+param set-default CA_SV_TL2_MINA -12
+param set-default CA_SV_TL2_MAXA 12
+param set-default CA_SV_TL2_TD 0
+param set-default CA_SV2_SLEW 1.5
+param set-default CA_SV_TL3_CT 3
+param set-default CA_SV_TL3_AX 0
+param set-default CA_SV_TL3_MINA -12
+param set-default CA_SV_TL3_MAXA 12
+param set-default CA_SV_TL3_TD 0
+param set-default CA_SV3_SLEW 1.5

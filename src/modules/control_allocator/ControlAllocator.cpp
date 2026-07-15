@@ -443,6 +443,8 @@ ControlAllocator::Run()
 			}
 
 			_control_allocation[i]->clipActuatorSetpoint();
+			// 将最终限速、限幅后的真实指令反馈给非线性执行器模型。
+			_actuator_effectiveness->setAppliedSetpoint(i, _control_allocation[i]->_actuator_sp);
 		}
 	}
 

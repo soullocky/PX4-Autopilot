@@ -1038,6 +1038,8 @@ mixer:
                             label: "Angle at Max\nTilt"
                           - name: 'CA_SV_TL${i}_TD'
                             label: 'Tilt Direction'
+                          - name: 'CA_SV_TL${i}_AX'
+                            label: 'Tilt Axis'
                           - name: 'CA_SV_TL${i}_CT'
                             label: 'Use for Control'
 
@@ -1157,6 +1159,8 @@ mixer:
                             label: "Angle at Max\nTilt"
                           - name: 'CA_SV_TL${i}_TD'
                             label: 'Tilt Direction'
+                          - name: 'CA_SV_TL${i}_AX'
+                            label: 'Tilt Axis'
                           - name: 'CA_SV_TL${i}_CT'
                             label: 'Use for Control'
 
@@ -1312,8 +1316,10 @@ mixer:
                             label: 'Direction CCW'
                             function: 'spin-dir'
                             show_as: 'true-if-positive'
-                          - name: 'CA_ROTOR${i}_TILT'
-                            label: 'Tilted by'
+                          - name: 'CA_ROTOR${i}_TR'
+                            label: 'Roll Tilt'
+                          - name: 'CA_ROTOR${i}_TP'
+                            label: 'Pitch Tilt'
                   - actuator_type: 'servo'
                     group_label: 'Tilt Servos'
                     count: 'CA_SV_TL_COUNT'
@@ -1326,6 +1332,7 @@ mixer:
                             label: "Angle at Max\nTilt"
                           - name: 'CA_SV_TL${i}_TD'
                             label: 'Tilt Direction'
+                          - name: 'CA_SV_TL${i}_AX'
+                            label: 'Tilt Axis'
                           - name: 'CA_SV_TL${i}_CT'
                             label: 'Use for Control'
-

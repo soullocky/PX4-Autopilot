@@ -605,6 +605,54 @@ void MulticopterPositionControl::Run()
 			// Publish attitude setpoint output
 			vehicle_attitude_setpoint_s attitude_setpoint{};
 			_control.getAttitudeSetpoint(attitude_setpoint);
+
+			if (_param_ca_airframe.get() == 16) {
+				_manual_control_setpoint_sub.update(&_manual_control_setpoint);
+
+				// AUX5/AUX6 独立指定姿态；普通 Roll/Pitch 摇杆仍由位置模式生成移动目标。
+				float roll_bias = 0.f;
+				float pitch_bias = 0.f;
+
+				if (_param_mc_aux_att_en.get() != 0) {
+					roll_bias = _manual_control_setpoint.aux5 * math::radians(_param_mc_aux_roll_max.get());
+					pitch_bias = -_manual_control_setpoint.aux6 * math::radians(_param_mc_aux_pitch_max.get());
+				}
+
+				const matrix::Quatf attitude_yaw{cosf(local_pos_sp.yaw * 0.5f), 0.f, 0.f,
+								 sinf(local_pos_sp.yaw * 0.5f)};
+				const matrix::Quatf attitude_bias = matrix::AxisAnglef{roll_bias, pitch_bias, 0.f};
+				const matrix::Quatf attitude_sp = attitude_yaw * attitude_bias;
+				attitude_sp.copyTo(attitude_setpoint.q_d);
+
+				// 将位置环的 NED 合力转换到带姿态偏置的机体系，补偿变姿造成的位置扰动。
+				const matrix::Vector3f thrust_body = attitude_sp.inversed().rotateVector(matrix::Vector3f(local_pos_sp.thrust));
+				thrust_body.copyTo(attitude_setpoint.thrust_body);
+				attitude_setpoint.yaw_sp_move_rate = local_pos_sp.yawspeed;
+
+			} else if (_param_ca_airframe.get() == 8 && _param_ca_rotor_count.get() == 4
+				   && _param_ca_tilt_count.get() == 4) {
+				_manual_control_setpoint_sub.update(&_manual_control_setpoint);
+
+				// 单轴俯仰倾转：AUX6 控制 Pitch，Roll 仍用于传统侧向位置控制。
+				const matrix::Eulerf conventional_attitude{matrix::Quatf{attitude_setpoint.q_d}};
+				float pitch_bias = 0.f;
+
+				if (_param_mc_aux_att_en.get() != 0) {
+					pitch_bias = -_manual_control_setpoint.aux6 * math::radians(_param_mc_aux_pitch_max.get());
+				}
+
+				const matrix::Quatf attitude_yaw{cosf(local_pos_sp.yaw * 0.5f), 0.f, 0.f,
+								 sinf(local_pos_sp.yaw * 0.5f)};
+				const matrix::Quatf attitude_rp{matrix::Eulerf{conventional_attitude.phi(), pitch_bias, 0.f}};
+				const matrix::Quatf attitude_sp = attitude_yaw * attitude_rp;
+				attitude_sp.copyTo(attitude_setpoint.q_d);
+
+				// 前后合力由单轴矢量推力实现，侧向合力仍依赖机体 Roll。
+				const matrix::Vector3f thrust_body = attitude_sp.inversed().rotateVector(matrix::Vector3f(local_pos_sp.thrust));
+				thrust_body.copyTo(attitude_setpoint.thrust_body);
+				attitude_setpoint.yaw_sp_move_rate = local_pos_sp.yawspeed;
+			}
+
 			attitude_setpoint.timestamp = hrt_absolute_time();
 			_vehicle_attitude_setpoint_pub.publish(attitude_setpoint);
 

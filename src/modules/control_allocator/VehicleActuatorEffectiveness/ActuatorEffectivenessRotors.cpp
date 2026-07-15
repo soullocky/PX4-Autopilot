@@ -74,6 +74,10 @@ ActuatorEffectivenessRotors::ActuatorEffectivenessRotors(ModuleParams *parent, A
 		_param_handles[i].moment_ratio = param_find(buffer);
 
 		if (_tilt_support) {
+			// 通用 MCTilt/VTOL 保留原有的单轴倾转关联。
+			snprintf(buffer, sizeof(buffer), "CA_ROTOR%u_TILT", i);
+			_param_handles[i].tilt_index = param_find(buffer);
+
 			// roll 对应的 tilt index 参数：CA_ROTORx_TR
 			snprintf(buffer, sizeof(buffer), "CA_ROTOR%u_TR", i);
 			_param_handles[i].tilt_index_roll = param_find(buffer);
@@ -121,19 +125,24 @@ void ActuatorEffectivenessRotors::updateParams()
 		param_get(_param_handles[i].moment_ratio, &_geometry.rotors[i].moment_ratio);
 
 		if (_tilt_support) {
+			int32_t tilt_param{0};
 			int32_t tilt_param_roll{0};
-                	int32_t tilt_param_pitch{0};
+			int32_t tilt_param_pitch{0};
 
+			// CA_ROTORx_TILT：通用单轴倾转舵机编号
+			param_get(_param_handles[i].tilt_index, &tilt_param);
 			// CA_ROTORx_TR：电机 i 使用的 roll-tilt 编号
 			param_get(_param_handles[i].tilt_index_roll, &tilt_param_roll);
 			// CA_ROTORx_TP：电机 i 使用的 pitch-tilt 编号
 			param_get(_param_handles[i].tilt_index_pitch, &tilt_param_pitch);
 
 			// 参数为 0 表示未使用，对应几何里 -1；大于 0 的值减 1 得到 0-based 索引
+			_geometry.rotors[i].tilt_index = tilt_param > 0 ? tilt_param - 1 : -1;
 			_geometry.rotors[i].tilt_index_roll  = tilt_param_roll  > 0 ? tilt_param_roll  - 1 : -1;
 			_geometry.rotors[i].tilt_index_pitch = tilt_param_pitch > 0 ? tilt_param_pitch - 1 : -1;
 
 		} else {
+			_geometry.rotors[i].tilt_index = -1;
 			_geometry.rotors[i].tilt_index_roll = -1;
 			_geometry.rotors[i].tilt_index_pitch = -1;
 		}
@@ -248,8 +257,8 @@ uint32_t ActuatorEffectivenessRotors::updateAxisFromTilts(const ActuatorEffectiv
 	uint32_t nontilted_motors = 0;
 
 	for (int i = 0; i < _geometry.num_rotors; ++i) {
-		// 用 pitch 对应的 tilt 来更新电机主轴方向
-           	int tilt_index = _geometry.rotors[i].tilt_index_pitch;
+		// 该接口用于原有单轴倾转 VTOL，使用 CA_ROTORx_TILT。
+		int tilt_index = _geometry.rotors[i].tilt_index;
 
 		if (tilt_index == -1 || tilt_index >= tilts.count()) {
 			nontilted_motors |= 1u << i;

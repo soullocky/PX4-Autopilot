@@ -67,6 +67,7 @@ public:
 		matrix::Vector3f axis;
 		float thrust_coef;
 		float moment_ratio;
+		int tilt_index;              ///< 单轴构型使用 CA_ROTORx_TILT
 		int tilt_index_roll;		// 对应 CA_ROTORx_TR，-1 表示未使用
 		int tilt_index_pitch;		// 对应 CA_ROTORx_TP，-1 表示未使用
 	};
@@ -145,7 +146,8 @@ private:
 		param_t axis_z;
 		param_t thrust_coef;
 		param_t moment_ratio;
-		// 新增：分别对应 roll / pitch 的 tilt 参数
+		param_t tilt_index;        ///< 单轴倾转参数 CA_ROTORx_TILT
+		// 双轴 Tiltquad 分别使用 roll / pitch 倾转参数
 		param_t tilt_index_roll;   // CA_ROTORx_TR
     		param_t tilt_index_pitch;  // CA_ROTORx_TP
 	};

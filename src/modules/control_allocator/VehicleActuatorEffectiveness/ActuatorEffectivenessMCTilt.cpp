@@ -33,6 +33,8 @@
 
 #include "ActuatorEffectivenessMCTilt.hpp"
 
+#include <matrix/matrix/AxisAngle.hpp>
+
 using namespace matrix;
 
 ActuatorEffectivenessMCTilt::ActuatorEffectivenessMCTilt(ModuleParams *parent)
@@ -73,6 +75,18 @@ ActuatorEffectivenessMCTilt::getEffectivenessMatrix(Configuration &configuration
 		}
 	}
 
+	if (!_nonlinear_initialized && _mc_rotors.geometry().num_rotors == 4 && _tilts.count() == 4) {
+		// 单轴矢量四旋翼从悬停附近开始非线性求解。
+		_nonlinear_sp.setZero();
+
+		for (int i = 0; i < 4; ++i) {
+			_nonlinear_sp(i) = 0.5f;
+			_nonlinear_sp(_first_tilt_idx + i) = _tilt_offsets(_first_tilt_idx + i);
+		}
+
+		_nonlinear_initialized = true;
+	}
+
 	return (rotors_added_successfully && tilts_added_successfully);
 }
 
@@ -80,51 +94,118 @@ void ActuatorEffectivenessMCTilt::updateSetpoint(const matrix::Vector<float, NUM
 		int matrix_index, ActuatorVector &actuator_sp, const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
 		const matrix::Vector<float, NUM_ACTUATORS> &actuator_max)
 {
-	actuator_sp += _tilt_offsets;
-	// TODO: dynamic matrix update
+	if (!_nonlinear_initialized) {
+		// 非四电机/四舵机的原有 MCTilt 继续使用静态分配。
+		actuator_sp += _tilt_offsets;
+		return;
+	}
 
-	bool yaw_saturated_positive = true;
-	bool yaw_saturated_negative = true;
+	ActuatorVector solution = _nonlinear_sp;
+	constexpr int iterations = 5;
 
-	for (int i = 0; i < _tilts.count(); ++i) {
+	for (int iteration = 0; iteration < iterations; ++iteration) {
+		Jacobian jacobian;
+		computeJacobian(solution, jacobian);
+		matrix::Matrix<float, NUM_ACTUATORS, NUM_AXES> inverse;
 
-		// custom yaw saturation logic: only declare yaw saturated if all tilts are at the negative or positive yawing limit
-		if (_tilts.getYawTorqueOfTilt(i) > FLT_EPSILON) {
+		if (!matrix::geninv(jacobian, inverse)) {
+			break;
+		}
 
-			if (yaw_saturated_positive && actuator_sp(i + _first_tilt_idx) < actuator_max(i + _first_tilt_idx) - FLT_EPSILON) {
-				yaw_saturated_positive = false;
-			}
+		const ActuatorVector delta = inverse * (control_sp - computeWrench(solution));
 
-			if (yaw_saturated_negative && actuator_sp(i + _first_tilt_idx) > actuator_min(i + _first_tilt_idx) + FLT_EPSILON) {
-				yaw_saturated_negative = false;
-			}
+		for (int i = 0; i < _first_tilt_idx; ++i) {
+			solution(i) = math::constrain(solution(i) + math::constrain(delta(i), -0.12f, 0.12f),
+						      actuator_min(i), actuator_max(i));
+		}
 
-		} else if (_tilts.getYawTorqueOfTilt(i) < -FLT_EPSILON) {
-			if (yaw_saturated_negative && actuator_sp(i + _first_tilt_idx) < actuator_max(i + _first_tilt_idx) - FLT_EPSILON) {
-				yaw_saturated_negative = false;
-			}
-
-			if (yaw_saturated_positive && actuator_sp(i + _first_tilt_idx) > actuator_min(i + _first_tilt_idx) + FLT_EPSILON) {
-				yaw_saturated_positive = false;
-			}
+		for (int i = _first_tilt_idx; i < _first_tilt_idx + _tilts.count(); ++i) {
+			solution(i) = math::constrain(solution(i) + math::constrain(delta(i), -0.10f, 0.10f),
+						      actuator_min(i), actuator_max(i));
 		}
 	}
 
-	_yaw_tilt_saturation_flags.tilt_yaw_neg = yaw_saturated_negative;
-	_yaw_tilt_saturation_flags.tilt_yaw_pos = yaw_saturated_positive;
+	actuator_sp = solution;
+	_requested_wrench = control_sp;
+}
+
+void ActuatorEffectivenessMCTilt::setAppliedSetpoint(int matrix_index, const ActuatorVector &actuator_sp)
+{
+	if (matrix_index == 0 && _nonlinear_initialized) {
+		_nonlinear_sp = actuator_sp;
+		_achieved_wrench = computeWrench(actuator_sp);
+	}
+}
+
+float ActuatorEffectivenessMCTilt::servoAngle(int servo_index, float setpoint) const
+{
+	const auto &config = _tilts.config(servo_index);
+	return math::lerp(config.min_angle, config.max_angle, math::constrain((setpoint + 1.f) * 0.5f, 0.f, 1.f));
+}
+
+matrix::Vector3f ActuatorEffectivenessMCTilt::rotorAxis(int rotor_index, const ActuatorVector &actuator) const
+{
+	const auto &rotor = _mc_rotors.geometry().rotors[rotor_index];
+	const int servo = rotor.tilt_index;
+
+	if (servo < 0 || servo >= _tilts.count()) {
+		return matrix::Vector3f{0.f, 0.f, -1.f};
+	}
+
+	const float direction = math::radians((float)_tilts.config(servo).tilt_direction);
+	const matrix::Vector3f rotation_axis{sinf(direction), -cosf(direction), 0.f};
+	return matrix::Dcmf{matrix::AxisAnglef{rotation_axis * servoAngle(servo, actuator(_first_tilt_idx + servo))}}
+	       * matrix::Vector3f{0.f, 0.f, -1.f};
+}
+
+ActuatorEffectivenessMCTilt::WrenchVector
+ActuatorEffectivenessMCTilt::computeWrench(const ActuatorVector &actuator) const
+{
+	WrenchVector wrench;
+	wrench.setZero();
+
+	for (int i = 0; i < _mc_rotors.geometry().num_rotors; ++i) {
+		const auto &rotor = _mc_rotors.geometry().rotors[i];
+		const matrix::Vector3f thrust = actuator(i) * rotor.thrust_coef * rotorAxis(i, actuator);
+		const matrix::Vector3f torque = rotor.position.cross(thrust) - rotor.moment_ratio * thrust;
+
+		for (int n = 0; n < 3; ++n) {
+			wrench(n) += torque(n);
+			wrench(n + 3) += thrust(n);
+		}
+	}
+
+	return wrench;
+}
+
+void ActuatorEffectivenessMCTilt::computeJacobian(const ActuatorVector &actuator, Jacobian &jacobian) const
+{
+	jacobian.setZero();
+	constexpr float epsilon = 0.01f;
+
+	for (int i = 0; i < _first_tilt_idx + _tilts.count(); ++i) {
+		ActuatorVector positive = actuator;
+		ActuatorVector negative = actuator;
+		positive(i) += epsilon;
+		negative(i) -= epsilon;
+		const WrenchVector derivative = (computeWrench(positive) - computeWrench(negative)) / (2.f * epsilon);
+
+		for (int n = 0; n < NUM_AXES; ++n) {
+			jacobian(n, i) = derivative(n);
+		}
+	}
 }
 
 void ActuatorEffectivenessMCTilt::getUnallocatedControl(int matrix_index, control_allocator_status_s &status)
 {
-	// Note: the values '-1', '1' and '0' are just to indicate a negative,
-	// positive or no saturation to the rate controller. The actual magnitude is not used.
-	if (_yaw_tilt_saturation_flags.tilt_yaw_pos) {
-		status.unallocated_torque[2] = 1.f;
+	if (!_nonlinear_initialized) {
+		return;
+	}
 
-	} else if (_yaw_tilt_saturation_flags.tilt_yaw_neg) {
-		status.unallocated_torque[2] = -1.f;
+	const WrenchVector error = _requested_wrench - _achieved_wrench;
 
-	} else {
-		status.unallocated_torque[2] = 0.f;
+	for (int i = 0; i < 3; ++i) {
+		status.unallocated_torque[i] = error(i);
+		status.unallocated_thrust[i] = error(i + 3);
 	}
 }

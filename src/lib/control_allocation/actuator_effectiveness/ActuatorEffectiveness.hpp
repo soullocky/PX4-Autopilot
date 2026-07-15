@@ -201,6 +201,12 @@ public:
 				    const matrix::Vector<float, NUM_ACTUATORS> &actuator_max) {}
 
 	/**
+	 * Callback after slew-rate limiting and clipping, containing the command that will actually be published.
+	 * Non-linear effectiveness models can use it as the next linearization point.
+	 */
+	virtual void setAppliedSetpoint(int matrix_index, const ActuatorVector &actuator_sp) {}
+
+	/**
 	 * Get a bitmask of motors to be stopped
 	 */
 	virtual uint32_t getStoppedMotors() const { return _stopped_motors_mask; }

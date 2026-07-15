@@ -59,6 +59,11 @@ public:
 		RollLike  = 1,     // 左右倾，主要产生 roll
 	};
 
+	enum class Mapping {
+		SingleAxis, ///< MCTilt/VTOL：CA_ROTORx_TILT 直接对应舵机
+		DualAxis,   ///< Tiltquad：TR/TP 映射到 roll/pitch 舵机对
+	};
+
 	enum class TiltDirection : int32_t {
 		// This matches with the parameter
 		TowardsFront = 0,
@@ -84,7 +89,8 @@ public:
 
 	const Params &config(int idx) const { return _params[idx]; }
 
-	void updateTorqueSign(const ActuatorEffectivenessRotors::Geometry &geometry, bool disable_pitch = false);
+	void updateTorqueSign(const ActuatorEffectivenessRotors::Geometry &geometry, bool disable_pitch = false,
+			      Mapping mapping = Mapping::SingleAxis);
 
 	bool hasYawControl() const;
 

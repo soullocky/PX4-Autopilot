@@ -63,7 +63,8 @@ param set-default CA_SV_TL0_CT 4    # Roll
 param set-default CA_SV_TL0_AX 1
 param set-default CA_SV_TL0_MINA -12
 param set-default CA_SV_TL0_MAXA 12
-param set-default CA_SV_TL0_TD 0
+# Roll-like 正倾转指向机体右侧（+Y）
+param set-default CA_SV_TL0_TD 90
 param set-default CA_SV0_SLEW 1.5
 
 # M1 Pitch Servo (PWM 6)
@@ -71,7 +72,8 @@ param set-default CA_SV_TL1_CT 2
 param set-default CA_SV_TL1_AX 0
 param set-default CA_SV_TL1_MINA -12
 param set-default CA_SV_TL1_MAXA 12
-param set-default CA_SV_TL1_TD 90
+# Pitch-like 正倾转指向机体前方（+X）
+param set-default CA_SV_TL1_TD 0
 param set-default CA_SV1_SLEW 1.5
 
 # ---- Motor 2 Tilt Servos ----
@@ -80,7 +82,7 @@ param set-default CA_SV_TL2_CT 4
 param set-default CA_SV_TL2_AX 1
 param set-default CA_SV_TL2_MINA -12
 param set-default CA_SV_TL2_MAXA 12
-param set-default CA_SV_TL2_TD 0
+param set-default CA_SV_TL2_TD 90
 param set-default CA_SV2_SLEW 1.5
 
 # M2 Pitch Servo (PWM 8)
@@ -88,7 +90,7 @@ param set-default CA_SV_TL3_CT 2
 param set-default CA_SV_TL3_AX 0
 param set-default CA_SV_TL3_MINA -12
 param set-default CA_SV_TL3_MAXA 12
-param set-default CA_SV_TL3_TD 90
+param set-default CA_SV_TL3_TD 0
 param set-default CA_SV3_SLEW 1.5
 
 # ---- Motor 3 Tilt Servos ----
@@ -97,7 +99,7 @@ param set-default CA_SV_TL4_CT 4
 param set-default CA_SV_TL4_AX 1
 param set-default CA_SV_TL4_MINA -12
 param set-default CA_SV_TL4_MAXA 12
-param set-default CA_SV_TL4_TD 0
+param set-default CA_SV_TL4_TD 90
 param set-default CA_SV4_SLEW 1.5
 
 # M3 Pitch Servo (PWM 10)
@@ -105,7 +107,7 @@ param set-default CA_SV_TL5_CT 2
 param set-default CA_SV_TL5_AX 0
 param set-default CA_SV_TL5_MINA -12
 param set-default CA_SV_TL5_MAXA 12
-param set-default CA_SV_TL5_TD 90
+param set-default CA_SV_TL5_TD 0
 param set-default CA_SV5_SLEW 1.5
 
 # ---- Motor 4 Tilt Servos ----
@@ -114,7 +116,7 @@ param set-default CA_SV_TL6_CT 4
 param set-default CA_SV_TL6_AX 1
 param set-default CA_SV_TL6_MINA -12
 param set-default CA_SV_TL6_MAXA 12
-param set-default CA_SV_TL6_TD 0
+param set-default CA_SV_TL6_TD 90
 param set-default CA_SV6_SLEW 1.5
 
 # M4 Pitch Servo (PWM 12)
@@ -122,5 +124,5 @@ param set-default CA_SV_TL7_CT 2
 param set-default CA_SV_TL7_AX 0
 param set-default CA_SV_TL7_MINA -12
 param set-default CA_SV_TL7_MAXA 12
-param set-default CA_SV_TL7_TD 90
+param set-default CA_SV_TL7_TD 0
 param set-default CA_SV7_SLEW 1.5
