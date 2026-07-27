@@ -48,7 +48,8 @@ struct wq_config_t {
 
 namespace wq_configurations
 {
-static constexpr wq_config_t rate_ctrl{"wq:rate_ctrl", 3150, 0}; // PX4 inner loop highest priority
+// 非线性倾转控制分配会在该工作队列上计算雅可比和伪逆，预留足够栈空间。
+static constexpr wq_config_t rate_ctrl{"wq:rate_ctrl", 6000, 0}; // PX4 inner loop highest priority
 
 static constexpr wq_config_t SPI0{"wq:SPI0", 2392, -1};
 static constexpr wq_config_t SPI1{"wq:SPI1", 2392, -2};

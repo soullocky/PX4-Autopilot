@@ -101,26 +101,56 @@ void ActuatorEffectivenessMCTilt::updateSetpoint(const matrix::Vector<float, NUM
 	}
 
 	ActuatorVector solution = _nonlinear_sp;
-	constexpr int iterations = 5;
+	// 使用上一周期真实输出作为初值，两次迭代可降低飞控实时计算负担。
+	constexpr int iterations = 2;
+	// 阻尼可抑制单轴构型接近奇异位形时，伪逆把微小控制误差放大成舵机抖动。
+	constexpr float damping = 0.15f;
+	constexpr float servo_center_gain = 0.002f;
+	constexpr float motor_step = 0.12f;
+	constexpr float servo_step = 0.03f;
 
 	for (int iteration = 0; iteration < iterations; ++iteration) {
-		Jacobian jacobian;
-		computeJacobian(solution, jacobian);
-		matrix::Matrix<float, NUM_ACTUATORS, NUM_AXES> inverse;
+		WrenchVector target = control_sp;
+		WrenchVector current_wrench = computeWrench(solution);
+		// 俯仰方向单轴倾转无法直接产生 Fy，不允许不可控误差把舵机持续推向极限。
+		target(ControlAxis::THRUST_Y) = current_wrench(ControlAxis::THRUST_Y);
 
-		if (!matrix::geninv(jacobian, inverse)) {
-			break;
-		}
-
-		const ActuatorVector delta = inverse * (control_sp - computeWrench(solution));
+		// 总升力独立分配，避免零推力时舵机雅可比退化导致油门无法启动。
+		const float collective_delta = math::constrain(
+						 current_wrench(ControlAxis::THRUST_Z) - target(ControlAxis::THRUST_Z), -0.12f, 0.12f);
 
 		for (int i = 0; i < _first_tilt_idx; ++i) {
-			solution(i) = math::constrain(solution(i) + math::constrain(delta(i), -0.12f, 0.12f),
+			solution(i) = math::constrain(solution(i) + collective_delta, actuator_min(i), actuator_max(i));
+		}
+
+		current_wrench = computeWrench(solution);
+		Jacobian jacobian;
+		computeJacobian(solution, jacobian);
+		// J^T (J J^T + lambda^2 I)^-1 是阻尼最小二乘解，秩不足时仍保持连续。
+		matrix::SquareMatrix<float, NUM_AXES> normal_matrix = jacobian * jacobian.transpose();
+
+		for (int axis = 0; axis < NUM_AXES; ++axis) {
+			normal_matrix(axis, axis) += damping * damping;
+		}
+
+		matrix::SquareMatrix<float, NUM_AXES> normal_inverse;
+
+		if (!normal_matrix.I(normal_inverse)) {
+			continue;
+		}
+
+		const ActuatorVector delta = jacobian.transpose() * (normal_inverse * (target - current_wrench));
+
+		for (int i = 0; i < _first_tilt_idx; ++i) {
+			solution(i) = math::constrain(solution(i) + math::constrain(delta(i), -motor_step, motor_step),
 						      actuator_min(i), actuator_max(i));
 		}
 
 		for (int i = _first_tilt_idx; i < _first_tilt_idx + _tilts.count(); ++i) {
-			solution(i) = math::constrain(solution(i) + math::constrain(delta(i), -0.10f, 0.10f),
+			// 弱回中项消除冗余自由度的长期漂移，不代替标准舵机角速度限制。
+			const float center_correction = servo_center_gain * (_tilt_offsets(i) - solution(i));
+			const float servo_delta = math::constrain(delta(i) + center_correction, -servo_step, servo_step);
+			solution(i) = math::constrain(solution(i) + servo_delta,
 						      actuator_min(i), actuator_max(i));
 		}
 	}
@@ -163,16 +193,34 @@ ActuatorEffectivenessMCTilt::computeWrench(const ActuatorVector &actuator) const
 {
 	WrenchVector wrench;
 	wrench.setZero();
+	float total_thrust = 0.f;
+	float roll_authority = 0.f;
+	float pitch_authority = 0.f;
+	float yaw_authority = 0.f;
 
 	for (int i = 0; i < _mc_rotors.geometry().num_rotors; ++i) {
 		const auto &rotor = _mc_rotors.geometry().rotors[i];
+		const float ct = fabsf(rotor.thrust_coef);
 		const matrix::Vector3f thrust = actuator(i) * rotor.thrust_coef * rotorAxis(i, actuator);
 		const matrix::Vector3f torque = rotor.position.cross(thrust) - rotor.moment_ratio * thrust;
+		total_thrust += ct;
+		roll_authority += ct * fabsf(rotor.position(1));
+		pitch_authority += ct * fabsf(rotor.position(0));
+		yaw_authority += ct * fabsf(rotor.moment_ratio);
 
 		for (int n = 0; n < 3; ++n) {
 			wrench(n) += torque(n);
 			wrench(n + 3) += thrust(n);
 		}
+	}
+
+	// 控制器给出的是归一化六维设定值，不能直接与物理 CT/力臂量纲比较。
+	wrench(ControlAxis::ROLL) /= math::max(roll_authority, FLT_EPSILON);
+	wrench(ControlAxis::PITCH) /= math::max(pitch_authority, FLT_EPSILON);
+	wrench(ControlAxis::YAW) /= math::max(yaw_authority, FLT_EPSILON);
+
+	for (int i = ControlAxis::THRUST_X; i <= ControlAxis::THRUST_Z; ++i) {
+		wrench(i) /= math::max(total_thrust, FLT_EPSILON);
 	}
 
 	return wrench;

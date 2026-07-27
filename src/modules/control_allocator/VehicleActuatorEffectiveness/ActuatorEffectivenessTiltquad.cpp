@@ -103,22 +103,44 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 {
 	// 非线性高斯-牛顿迭代：联合求解四个电机和八个双轴倾转舵机。
 	ActuatorVector solution = _nonlinear_sp;
-	constexpr int iterations = 5;
+
+	// 输入异常时保持上一周期的有效输出，避免 NaN 传播到电机和舵机。
+	if (!control_sp.isAllFinite()) {
+		actuator_sp = solution;
+		return;
+	}
+
+	// 使用上一周期真实输出作为初值，两次迭代可降低飞控实时计算负担。
+	constexpr int iterations = 2;
+	// 阻尼用于抑制双轴机构接近奇异位形时的解跳变。
+	constexpr float damping = 0.15f;
+	constexpr float servo_center_gain = 0.002f;
 	// 以下步长仅限制单次数值迭代，实际角速度由 CA_Rx_SLEW/CA_SVx_SLEW 统一限制。
 	constexpr float motor_step = 0.12f;
-	constexpr float servo_step = 0.10f;
+	constexpr float servo_step = 0.03f;
 
 	for (int iteration = 0; iteration < iterations; ++iteration) {
 		Jacobian jacobian;
 		computeJacobian(solution, jacobian);
-		matrix::Matrix<float, NUM_ACTUATORS, NUM_AXES> inverse;
+		// J^T (J J^T + lambda^2 I)^-1：秩不足时仍能得到连续的阻尼最小二乘解。
+		matrix::SquareMatrix<float, NUM_AXES> normal_matrix = jacobian * jacobian.transpose();
 
-		if (!matrix::geninv(jacobian, inverse)) {
+		for (int axis = 0; axis < NUM_AXES; ++axis) {
+			normal_matrix(axis, axis) += damping * damping;
+		}
+
+		matrix::SquareMatrix<float, NUM_AXES> normal_inverse;
+
+		if (!normal_matrix.I(normal_inverse)) {
 			break;
 		}
 
 		const WrenchVector error = control_sp - computeWrench(solution);
-		const ActuatorVector delta = inverse * error;
+		const ActuatorVector delta = jacobian.transpose() * (normal_inverse * error);
+
+		if (!delta.isAllFinite()) {
+			break;
+		}
 
 		for (int i = 0; i < _first_tilt_idx; ++i) {
 			solution(i) = math::constrain(solution(i) + math::constrain(delta(i), -motor_step, motor_step),
@@ -126,7 +148,10 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 		}
 
 		for (int i = _first_tilt_idx; i < _first_tilt_idx + _tilts.count(); ++i) {
-			solution(i) = math::constrain(solution(i) + math::constrain(delta(i), -servo_step, servo_step),
+			// 弱回中项约束双轴冗余解漂移，不取代输出层的标准舵机限速。
+			const float center_correction = servo_center_gain * (_tilt_offsets(i) - solution(i));
+			const float servo_delta = math::constrain(delta(i) + center_correction, -servo_step, servo_step);
+			solution(i) = math::constrain(solution(i) + servo_delta,
 						      actuator_min(i), actuator_max(i));
 		}
 	}
@@ -138,6 +163,10 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 void ActuatorEffectivenessTiltquad::setAppliedSetpoint(int matrix_index, const ActuatorVector &actuator_sp)
 {
 	if (matrix_index != 0) {
+		return;
+	}
+
+	if (!actuator_sp.isAllFinite()) {
 		return;
 	}
 
@@ -183,18 +212,36 @@ ActuatorEffectivenessTiltquad::computeWrench(const ActuatorVector &actuator) con
 	WrenchVector wrench;
 	wrench.setZero();
 	const auto &geometry = _mc_rotors.geometry();
+	float total_thrust = 0.f;
+	float roll_authority = 0.f;
+	float pitch_authority = 0.f;
+	float yaw_authority = 0.f;
 
 	for (int i = 0; i < geometry.num_rotors; ++i) {
 		const auto &rotor = geometry.rotors[i];
+		const float ct = fabsf(rotor.thrust_coef);
 		const matrix::Vector3f axis = rotorAxis(i, actuator);
 		const matrix::Vector3f thrust = actuator(i) * rotor.thrust_coef * axis;
 		// 与 ActuatorEffectivenessRotors 保持相同的反扭矩符号约定。
 		const matrix::Vector3f torque = rotor.position.cross(thrust) - rotor.moment_ratio * thrust;
+		total_thrust += ct;
+		roll_authority += ct * fabsf(rotor.position(1));
+		pitch_authority += ct * fabsf(rotor.position(0));
+		yaw_authority += ct * fabsf(rotor.moment_ratio);
 
 		for (int n = 0; n < 3; ++n) {
 			wrench(n) += torque(n);
 			wrench(n + 3) += thrust(n);
 		}
+	}
+
+	// 将物理 CT 和力臂产生的六维量转换为 PX4 控制器使用的归一化尺度。
+	wrench(ControlAxis::ROLL) /= math::max(roll_authority, FLT_EPSILON);
+	wrench(ControlAxis::PITCH) /= math::max(pitch_authority, FLT_EPSILON);
+	wrench(ControlAxis::YAW) /= math::max(yaw_authority, FLT_EPSILON);
+
+	for (int i = ControlAxis::THRUST_X; i <= ControlAxis::THRUST_Z; ++i) {
+		wrench(i) /= math::max(total_thrust, FLT_EPSILON);
 	}
 
 	return wrench;
