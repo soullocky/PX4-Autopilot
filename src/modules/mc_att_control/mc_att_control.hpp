@@ -136,6 +136,9 @@ private:
 	SlewRate<float> _manual_throttle_maximum{0.f}; ///< 0 when disarmed ramped to 1 when spooled up
 	AlphaFilter<float> _man_roll_input_filter;
 	AlphaFilter<float> _man_pitch_input_filter;
+	// 对 AUX5/AUX6 姿态偏置进行独立一阶低通，消除旋钮量化产生的小台阶。
+	AlphaFilter<float> _aux_roll_input_filter;
+	AlphaFilter<float> _aux_pitch_input_filter;
 
 	hrt_abstime _last_run{0};
 	hrt_abstime _last_attitude_setpoint{0};
@@ -156,6 +159,7 @@ private:
 		(ParamInt<px4::params::MC_AUX_ATT_EN>)      _param_mc_aux_att_en,
 		(ParamFloat<px4::params::MC_AUX_ROLL_MAX>)  _param_mc_aux_roll_max,
 		(ParamFloat<px4::params::MC_AUX_PITCH_MAX>) _param_mc_aux_pitch_max,
+		(ParamFloat<px4::params::MC_AUX_ATT_TAU>)   _param_mc_aux_att_tau,
 
 		(ParamFloat<px4::params::MC_ROLL_P>)        _param_mc_roll_p,
 		(ParamFloat<px4::params::MC_PITCH_P>)       _param_mc_pitch_p,

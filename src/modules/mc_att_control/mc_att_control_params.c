@@ -199,6 +199,21 @@ PARAM_DEFINE_FLOAT(MC_AUX_ROLL_MAX, 0.0f);
 PARAM_DEFINE_FLOAT(MC_AUX_PITCH_MAX, 0.0f);
 
 /**
+ * AUX attitude input filter time constant
+ *
+ * Low-pass filter time constant for AUX5/AUX6 attitude bias commands.
+ * Setting this parameter to 0 disables filtering.
+ *
+ * @unit s
+ * @min 0.0
+ * @max 2.0
+ * @decimal 2
+ * @increment 0.05
+ * @group Multicopter Attitude Control
+ */
+PARAM_DEFINE_FLOAT(MC_AUX_ATT_TAU, 0.3f);
+
+/**
  * Manual tilt input filter time constant
  *
  * Setting this parameter to 0 disables the filter

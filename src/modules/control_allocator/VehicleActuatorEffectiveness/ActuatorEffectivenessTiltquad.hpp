@@ -92,10 +92,10 @@ protected:
 	WrenchVector computeWrench(const ActuatorVector &actuator) const;
 
 	/**
-	 * 使用中心差分计算六维输出对全部执行器设定值的雅可比矩阵。
-	 * 该矩阵用于高斯-牛顿非线性控制分配。
+	 * 使用当前输出和前向差分计算六维输出对全部执行器设定值的雅可比矩阵。
+	 * 复用 current_wrench 可避免重复模型计算，降低 rate_ctrl 工作队列负载。
 	 */
-	void computeJacobian(const ActuatorVector &actuator, Jacobian &jacobian) const;
+	void computeJacobian(const ActuatorVector &actuator, const WrenchVector &current_wrench, Jacobian &jacobian) const;
 
 	/**
 	 * 根据指定旋翼对应的 Roll/Pitch 舵机角度计算机体系推力单位向量。

@@ -101,13 +101,22 @@ void ActuatorEffectivenessMCTilt::updateSetpoint(const matrix::Vector<float, NUM
 	}
 
 	ActuatorVector solution = _nonlinear_sp;
-	// 使用上一周期真实输出作为初值，两次迭代可降低飞控实时计算负担。
-	constexpr int iterations = 2;
+
+	// 输入异常时保持上一周期的有效输出，避免 NaN 传播到电机和舵机。
+	if (!control_sp.isAllFinite()) {
+		actuator_sp = solution;
+		return;
+	}
+
+	// 内环每周期运行；单次迭代可保持响应，同时降低 CUAV 7 Nano 上 rate_ctrl 的计算负载。
+	constexpr int iterations = 1;
 	// 阻尼可抑制单轴构型接近奇异位形时，伪逆把微小控制误差放大成舵机抖动。
 	constexpr float damping = 0.15f;
 	constexpr float servo_center_gain = 0.002f;
 	constexpr float motor_step = 0.12f;
 	constexpr float servo_step = 0.03f;
+	// 行程不足时优先保持姿态、偏航和升力，允许前向位置误差暂时增大。
+	constexpr float axis_weight[NUM_AXES] {3.f, 3.f, 4.f, 0.5f, 0.5f, 3.f};
 
 	for (int iteration = 0; iteration < iterations; ++iteration) {
 		WrenchVector target = control_sp;
@@ -125,9 +134,22 @@ void ActuatorEffectivenessMCTilt::updateSetpoint(const matrix::Vector<float, NUM
 
 		current_wrench = computeWrench(solution);
 		Jacobian jacobian;
-		computeJacobian(solution, jacobian);
+		computeJacobian(solution, current_wrench, jacobian);
+		const WrenchVector error = target - current_wrench;
+		Jacobian weighted_jacobian = jacobian;
+		WrenchVector weighted_error = error;
+
+		for (int axis = 0; axis < NUM_AXES; ++axis) {
+			// 单轴构型不可直接控制 Fy；其余轴按姿态、偏航、升力优先级加权。
+			weighted_error(axis) *= axis_weight[axis];
+
+			for (int actuator = 0; actuator < NUM_ACTUATORS; ++actuator) {
+				weighted_jacobian(axis, actuator) *= axis_weight[axis];
+			}
+		}
+
 		// J^T (J J^T + lambda^2 I)^-1 是阻尼最小二乘解，秩不足时仍保持连续。
-		matrix::SquareMatrix<float, NUM_AXES> normal_matrix = jacobian * jacobian.transpose();
+		matrix::SquareMatrix<float, NUM_AXES> normal_matrix = weighted_jacobian * weighted_jacobian.transpose();
 
 		for (int axis = 0; axis < NUM_AXES; ++axis) {
 			normal_matrix(axis, axis) += damping * damping;
@@ -136,10 +158,14 @@ void ActuatorEffectivenessMCTilt::updateSetpoint(const matrix::Vector<float, NUM
 		matrix::SquareMatrix<float, NUM_AXES> normal_inverse;
 
 		if (!normal_matrix.I(normal_inverse)) {
-			continue;
+			break;
 		}
 
-		const ActuatorVector delta = jacobian.transpose() * (normal_inverse * (target - current_wrench));
+		const ActuatorVector delta = weighted_jacobian.transpose() * (normal_inverse * weighted_error);
+
+		if (!delta.isAllFinite()) {
+			break;
+		}
 
 		for (int i = 0; i < _first_tilt_idx; ++i) {
 			solution(i) = math::constrain(solution(i) + math::constrain(delta(i), -motor_step, motor_step),
@@ -161,10 +187,13 @@ void ActuatorEffectivenessMCTilt::updateSetpoint(const matrix::Vector<float, NUM
 
 void ActuatorEffectivenessMCTilt::setAppliedSetpoint(int matrix_index, const ActuatorVector &actuator_sp)
 {
-	if (matrix_index == 0 && _nonlinear_initialized) {
-		_nonlinear_sp = actuator_sp;
-		_achieved_wrench = computeWrench(actuator_sp);
+	if (matrix_index != 0 || !_nonlinear_initialized || !actuator_sp.isAllFinite()) {
+		return;
 	}
+
+	// 必须使用最终发布值，避免标准输出限速后模型状态与真实舵机指令不同步。
+	_nonlinear_sp = actuator_sp;
+	_achieved_wrench = computeWrench(actuator_sp);
 }
 
 float ActuatorEffectivenessMCTilt::servoAngle(int servo_index, float setpoint) const
@@ -226,17 +255,18 @@ ActuatorEffectivenessMCTilt::computeWrench(const ActuatorVector &actuator) const
 	return wrench;
 }
 
-void ActuatorEffectivenessMCTilt::computeJacobian(const ActuatorVector &actuator, Jacobian &jacobian) const
+void ActuatorEffectivenessMCTilt::computeJacobian(const ActuatorVector &actuator,
+		const WrenchVector &current_wrench, Jacobian &jacobian) const
 {
 	jacobian.setZero();
 	constexpr float epsilon = 0.01f;
+	const int actuator_count = _first_tilt_idx + _tilts.count();
 
-	for (int i = 0; i < _first_tilt_idx + _tilts.count(); ++i) {
+	// 前向差分配合当前输出复用，每周期少做 8 次完整模型计算。
+	for (int i = 0; i < actuator_count; ++i) {
 		ActuatorVector positive = actuator;
-		ActuatorVector negative = actuator;
 		positive(i) += epsilon;
-		negative(i) -= epsilon;
-		const WrenchVector derivative = (computeWrench(positive) - computeWrench(negative)) / (2.f * epsilon);
+		const WrenchVector derivative = (computeWrench(positive) - current_wrench) / epsilon;
 
 		for (int n = 0; n < NUM_AXES; ++n) {
 			jacobian(n, i) = derivative(n);

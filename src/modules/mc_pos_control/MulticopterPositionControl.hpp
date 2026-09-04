@@ -139,9 +139,27 @@ private:
 		(ParamInt<px4::params::CA_AIRFRAME>)       _param_ca_airframe,
 		(ParamInt<px4::params::CA_ROTOR_COUNT>)    _param_ca_rotor_count,
 		(ParamInt<px4::params::CA_SV_TL_COUNT>)    _param_ca_tilt_count,
+		// Tiltquad 的水平矢量力限制直接使用实际倾转舵机机械角度，而非 MPC_TILTMAX_AIR。
+		(ParamFloat<px4::params::CA_SV_TL0_MINA>) _param_ca_sv_tl0_mina,
+		(ParamFloat<px4::params::CA_SV_TL0_MAXA>) _param_ca_sv_tl0_maxa,
+		(ParamFloat<px4::params::CA_SV_TL1_MINA>) _param_ca_sv_tl1_mina,
+		(ParamFloat<px4::params::CA_SV_TL1_MAXA>) _param_ca_sv_tl1_maxa,
+		(ParamFloat<px4::params::CA_SV_TL2_MINA>) _param_ca_sv_tl2_mina,
+		(ParamFloat<px4::params::CA_SV_TL2_MAXA>) _param_ca_sv_tl2_maxa,
+		(ParamFloat<px4::params::CA_SV_TL3_MINA>) _param_ca_sv_tl3_mina,
+		(ParamFloat<px4::params::CA_SV_TL3_MAXA>) _param_ca_sv_tl3_maxa,
+		(ParamFloat<px4::params::CA_SV_TL4_MINA>) _param_ca_sv_tl4_mina,
+		(ParamFloat<px4::params::CA_SV_TL4_MAXA>) _param_ca_sv_tl4_maxa,
+		(ParamFloat<px4::params::CA_SV_TL5_MINA>) _param_ca_sv_tl5_mina,
+		(ParamFloat<px4::params::CA_SV_TL5_MAXA>) _param_ca_sv_tl5_maxa,
+		(ParamFloat<px4::params::CA_SV_TL6_MINA>) _param_ca_sv_tl6_mina,
+		(ParamFloat<px4::params::CA_SV_TL6_MAXA>) _param_ca_sv_tl6_maxa,
+		(ParamFloat<px4::params::CA_SV_TL7_MINA>) _param_ca_sv_tl7_mina,
+		(ParamFloat<px4::params::CA_SV_TL7_MAXA>) _param_ca_sv_tl7_maxa,
 		(ParamInt<px4::params::MC_AUX_ATT_EN>)     _param_mc_aux_att_en,
 		(ParamFloat<px4::params::MC_AUX_ROLL_MAX>) _param_mc_aux_roll_max,
 		(ParamFloat<px4::params::MC_AUX_PITCH_MAX>) _param_mc_aux_pitch_max,
+		(ParamFloat<px4::params::MC_AUX_ATT_TAU>)  _param_mc_aux_att_tau,
 		// Position Control
 		(ParamFloat<px4::params::MPC_XY_P>)         _param_mpc_xy_p,
 		(ParamFloat<px4::params::MPC_Z_P>)          _param_mpc_z_p,
@@ -212,6 +230,9 @@ private:
 
 	AlphaFilter<matrix::Vector2f> _vel_deriv_xy_lp_filter{};
 	AlphaFilter<float> _vel_deriv_z_lp_filter{};
+	// 独立平滑 AUX5/AUX6 的姿态偏置，避免旋钮量化引起倾斜指令跳变。
+	AlphaFilter<float> _aux_roll_input_filter{};
+	AlphaFilter<float> _aux_pitch_input_filter{};
 
 	GotoControl _goto_control; ///< class for handling smooth goto position setpoints
 	PositionControl _control; ///< class for core PID position control

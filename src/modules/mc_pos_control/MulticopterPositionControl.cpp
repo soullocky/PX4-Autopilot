@@ -41,6 +41,18 @@
 
 using namespace matrix;
 
+namespace
+{
+constexpr float kTiltVectorNumericalAngleLimitDeg = 85.f;
+
+float tiltServoLimitRad(float min_angle_deg, float max_angle_deg)
+{
+	// 零倾转位于当前舵机行程内时，取到两端的较小角度作为安全可用余量。
+	const float limit_deg = math::min(fabsf(min_angle_deg), fabsf(max_angle_deg));
+	return math::radians(math::constrain(limit_deg, 0.f, kTiltVectorNumericalAngleLimitDeg));
+}
+}
+
 MulticopterPositionControl::MulticopterPositionControl(bool vtol) :
 	ModuleParams(nullptr),
 	ScheduledWorkItem(MODULE_NAME, px4::wq_configurations::nav_and_controllers),
@@ -516,9 +528,26 @@ void MulticopterPositionControl::Run()
 				_control.resetIntegral();
 			}
 
-			// limit tilt during takeoff ramupup
-			const float tilt_limit_deg = (_takeoff.getTakeoffState() < TakeoffState::flight)
-						     ? _param_mpc_tiltmax_lnd.get() : _param_mpc_tiltmax_air.get();
+			// 起飞阶段沿用普通多旋翼限制；进入飞行后 Tiltquad 使用双轴舵机真实行程。
+			float tilt_limit_deg = (_takeoff.getTakeoffState() < TakeoffState::flight)
+					       ? _param_mpc_tiltmax_lnd.get() : _param_mpc_tiltmax_air.get();
+
+			if (_param_ca_airframe.get() == 16 && _takeoff.getTakeoffState() >= TakeoffState::flight) {
+				const float roll_limit = math::min(
+							       math::min(tiltServoLimitRad(_param_ca_sv_tl0_mina.get(), _param_ca_sv_tl0_maxa.get()),
+									 tiltServoLimitRad(_param_ca_sv_tl2_mina.get(), _param_ca_sv_tl2_maxa.get())),
+							       math::min(tiltServoLimitRad(_param_ca_sv_tl4_mina.get(), _param_ca_sv_tl4_maxa.get()),
+									 tiltServoLimitRad(_param_ca_sv_tl6_mina.get(), _param_ca_sv_tl6_maxa.get())));
+				const float pitch_limit = math::min(
+								math::min(tiltServoLimitRad(_param_ca_sv_tl1_mina.get(), _param_ca_sv_tl1_maxa.get()),
+									  tiltServoLimitRad(_param_ca_sv_tl3_mina.get(), _param_ca_sv_tl3_maxa.get())),
+								math::min(tiltServoLimitRad(_param_ca_sv_tl5_mina.get(), _param_ca_sv_tl5_maxa.get()),
+									  tiltServoLimitRad(_param_ca_sv_tl7_mina.get(), _param_ca_sv_tl7_maxa.get())));
+				// 双轴独立可达包络转换为 PositionControl 所需的最大合倾角，仍避开 90° 奇异点。
+				tilt_limit_deg = math::degrees(atanf(sqrtf(sq(tanf(roll_limit)) + sq(tanf(pitch_limit)))));
+				tilt_limit_deg = math::min(tilt_limit_deg, kTiltVectorNumericalAngleLimitDeg);
+			}
+
 			_control.setTiltLimit(_tilt_limit_slew_rate.update(math::radians(tilt_limit_deg), dt));
 
 			const float speed_up = _takeoff.updateRamp(dt,
@@ -608,14 +637,24 @@ void MulticopterPositionControl::Run()
 
 			if (_param_ca_airframe.get() == 16) {
 				_manual_control_setpoint_sub.update(&_manual_control_setpoint);
+				// 位置模式也使用同一时间常数，避免切换模式时 AUX 指令响应突变。
+				_aux_roll_input_filter.setParameters(dt, _param_mc_aux_att_tau.get());
+				_aux_pitch_input_filter.setParameters(dt, _param_mc_aux_att_tau.get());
 
 				// AUX5/AUX6 独立指定姿态；普通 Roll/Pitch 摇杆仍由位置模式生成移动目标。
 				float roll_bias = 0.f;
 				float pitch_bias = 0.f;
 
 				if (_param_mc_aux_att_en.get() != 0) {
-					roll_bias = _manual_control_setpoint.aux5 * math::radians(_param_mc_aux_roll_max.get());
-					pitch_bias = -_manual_control_setpoint.aux6 * math::radians(_param_mc_aux_pitch_max.get());
+					// 平滑 AUX 旋钮的离散跳变，避免位置模式下机体倾斜呈现逐级抖动。
+					roll_bias = _aux_roll_input_filter.update(_manual_control_setpoint.aux5)
+						    * math::radians(_param_mc_aux_roll_max.get());
+					pitch_bias = -_aux_pitch_input_filter.update(_manual_control_setpoint.aux6)
+						     * math::radians(_param_mc_aux_pitch_max.get());
+
+				} else {
+					_aux_roll_input_filter.reset(0.f);
+					_aux_pitch_input_filter.reset(0.f);
 				}
 
 				const matrix::Quatf attitude_yaw{cosf(local_pos_sp.yaw * 0.5f), 0.f, 0.f,
@@ -625,20 +664,43 @@ void MulticopterPositionControl::Run()
 				attitude_sp.copyTo(attitude_setpoint.q_d);
 
 				// 将位置环的 NED 合力转换到带姿态偏置的机体系，补偿变姿造成的位置扰动。
-				const matrix::Vector3f thrust_body = attitude_sp.inversed().rotateVector(matrix::Vector3f(local_pos_sp.thrust));
+				matrix::Vector3f thrust_body = attitude_sp.inversed().rotateVector(matrix::Vector3f(local_pos_sp.thrust));
+				// 双轴倾转分别产生 Fx/Fy，按实际 Pitch-like/Roll-like 舵机的最小安全行程逐轴限幅。
+				// 不再复用 MPC_TILTMAX_AIR，也不把方形双轴工作包络错误裁剪为圆锥。
+				const float roll_limit = math::min(
+							       math::min(tiltServoLimitRad(_param_ca_sv_tl0_mina.get(), _param_ca_sv_tl0_maxa.get()),
+									 tiltServoLimitRad(_param_ca_sv_tl2_mina.get(), _param_ca_sv_tl2_maxa.get())),
+							       math::min(tiltServoLimitRad(_param_ca_sv_tl4_mina.get(), _param_ca_sv_tl4_maxa.get()),
+									 tiltServoLimitRad(_param_ca_sv_tl6_mina.get(), _param_ca_sv_tl6_maxa.get())));
+				const float pitch_limit = math::min(
+								math::min(tiltServoLimitRad(_param_ca_sv_tl1_mina.get(), _param_ca_sv_tl1_maxa.get()),
+									  tiltServoLimitRad(_param_ca_sv_tl3_mina.get(), _param_ca_sv_tl3_maxa.get())),
+								math::min(tiltServoLimitRad(_param_ca_sv_tl5_mina.get(), _param_ca_sv_tl5_maxa.get()),
+									  tiltServoLimitRad(_param_ca_sv_tl7_mina.get(), _param_ca_sv_tl7_maxa.get())));
+				thrust_body(0) = math::constrain(thrust_body(0), -fabsf(thrust_body(2)) * tanf(pitch_limit),
+								 fabsf(thrust_body(2)) * tanf(pitch_limit));
+				thrust_body(1) = math::constrain(thrust_body(1), -fabsf(thrust_body(2)) * tanf(roll_limit),
+								 fabsf(thrust_body(2)) * tanf(roll_limit));
+
 				thrust_body.copyTo(attitude_setpoint.thrust_body);
 				attitude_setpoint.yaw_sp_move_rate = local_pos_sp.yawspeed;
 
 			} else if (_param_ca_airframe.get() == 8 && _param_ca_rotor_count.get() == 4
-				   && _param_ca_tilt_count.get() == 4) {
+					   && _param_ca_tilt_count.get() == 4) {
 				_manual_control_setpoint_sub.update(&_manual_control_setpoint);
+				// 单轴机型仅过滤 AUX6 的俯仰偏置，AUX5 不参与该构型。
+				_aux_pitch_input_filter.setParameters(dt, _param_mc_aux_att_tau.get());
 
 				// 单轴俯仰倾转：AUX6 控制 Pitch，Roll 仍用于传统侧向位置控制。
 				const matrix::Eulerf conventional_attitude{matrix::Quatf{attitude_setpoint.q_d}};
 				float pitch_bias = 0.f;
 
 				if (_param_mc_aux_att_en.get() != 0) {
-					pitch_bias = -_manual_control_setpoint.aux6 * math::radians(_param_mc_aux_pitch_max.get());
+					pitch_bias = -_aux_pitch_input_filter.update(_manual_control_setpoint.aux6)
+						     * math::radians(_param_mc_aux_pitch_max.get());
+
+				} else {
+					_aux_pitch_input_filter.reset(0.f);
 				}
 
 				const matrix::Quatf attitude_yaw{cosf(local_pos_sp.yaw * 0.5f), 0.f, 0.f,
@@ -648,7 +710,15 @@ void MulticopterPositionControl::Run()
 				attitude_sp.copyTo(attitude_setpoint.q_d);
 
 				// 前后合力由单轴矢量推力实现，侧向合力仍依赖机体 Roll。
-				const matrix::Vector3f thrust_body = attitude_sp.inversed().rotateVector(matrix::Vector3f(local_pos_sp.thrust));
+				matrix::Vector3f thrust_body = attitude_sp.inversed().rotateVector(matrix::Vector3f(local_pos_sp.thrust));
+				// 单轴构型只限制 Fx；限值取四个 Pitch-like 舵机中最小的安全可用行程。
+				const float pitch_limit = math::min(
+								math::min(tiltServoLimitRad(_param_ca_sv_tl0_mina.get(), _param_ca_sv_tl0_maxa.get()),
+									  tiltServoLimitRad(_param_ca_sv_tl1_mina.get(), _param_ca_sv_tl1_maxa.get())),
+								math::min(tiltServoLimitRad(_param_ca_sv_tl2_mina.get(), _param_ca_sv_tl2_maxa.get()),
+									  tiltServoLimitRad(_param_ca_sv_tl3_mina.get(), _param_ca_sv_tl3_maxa.get())));
+				thrust_body(0) = math::constrain(thrust_body(0), -fabsf(thrust_body(2)) * tanf(pitch_limit),
+								 fabsf(thrust_body(2)) * tanf(pitch_limit));
 				thrust_body.copyTo(attitude_setpoint.thrust_body);
 				attitude_setpoint.yaw_sp_move_rate = local_pos_sp.yawspeed;
 			}

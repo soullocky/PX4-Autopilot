@@ -110,20 +110,36 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 		return;
 	}
 
-	// 使用上一周期真实输出作为初值，两次迭代可降低飞控实时计算负担。
-	constexpr int iterations = 2;
+	// 内环每周期运行；单次迭代可保持响应，同时避免数值分配挤占 rate_ctrl 工作队列。
+	constexpr int iterations = 1;
 	// 阻尼用于抑制双轴机构接近奇异位形时的解跳变。
 	constexpr float damping = 0.15f;
 	constexpr float servo_center_gain = 0.002f;
 	// 以下步长仅限制单次数值迭代，实际角速度由 CA_Rx_SLEW/CA_SVx_SLEW 统一限制。
 	constexpr float motor_step = 0.12f;
 	constexpr float servo_step = 0.03f;
+	// 当执行器行程不足时，优先保持姿态和升力，允许水平位置误差暂时增大。
+	constexpr float axis_weight[NUM_AXES] {3.f, 3.f, 4.f, 0.5f, 0.5f, 3.f};
 
 	for (int iteration = 0; iteration < iterations; ++iteration) {
+		const WrenchVector current_wrench = computeWrench(solution);
 		Jacobian jacobian;
-		computeJacobian(solution, jacobian);
+		computeJacobian(solution, current_wrench, jacobian);
+		const WrenchVector error = control_sp - current_wrench;
+		Jacobian weighted_jacobian = jacobian;
+		WrenchVector weighted_error = error;
+
+		for (int axis = 0; axis < NUM_AXES; ++axis) {
+			// 加权最小二乘：Mx/My/Mz/Fz 的误差权重大于 Fx/Fy。
+			weighted_error(axis) *= axis_weight[axis];
+
+			for (int actuator = 0; actuator < NUM_ACTUATORS; ++actuator) {
+				weighted_jacobian(axis, actuator) *= axis_weight[axis];
+			}
+		}
+
 		// J^T (J J^T + lambda^2 I)^-1：秩不足时仍能得到连续的阻尼最小二乘解。
-		matrix::SquareMatrix<float, NUM_AXES> normal_matrix = jacobian * jacobian.transpose();
+		matrix::SquareMatrix<float, NUM_AXES> normal_matrix = weighted_jacobian * weighted_jacobian.transpose();
 
 		for (int axis = 0; axis < NUM_AXES; ++axis) {
 			normal_matrix(axis, axis) += damping * damping;
@@ -135,8 +151,7 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 			break;
 		}
 
-		const WrenchVector error = control_sp - computeWrench(solution);
-		const ActuatorVector delta = jacobian.transpose() * (normal_inverse * error);
+		const ActuatorVector delta = weighted_jacobian.transpose() * (normal_inverse * weighted_error);
 
 		if (!delta.isAllFinite()) {
 			break;
@@ -248,19 +263,19 @@ ActuatorEffectivenessTiltquad::computeWrench(const ActuatorVector &actuator) con
 }
 
 // 对非线性六维模型进行数值线性化，供每次迭代计算执行器修正量。
-void ActuatorEffectivenessTiltquad::computeJacobian(const ActuatorVector &actuator, Jacobian &jacobian) const
+void ActuatorEffectivenessTiltquad::computeJacobian(const ActuatorVector &actuator,
+		const WrenchVector &current_wrench, Jacobian &jacobian) const
 {
 	jacobian.setZero();
 	constexpr float epsilon = 0.01f;
 	const int actuator_count = _first_tilt_idx + _tilts.count();
 
-	// 数值差分可同时覆盖双轴旋转顺序和推力/倾角的乘积耦合。
+	// 前向差分可同时覆盖双轴旋转顺序和推力/倾角的乘积耦合。
+	// 当前点输出由调用方复用，每周期少做 12 次完整推力模型计算。
 	for (int i = 0; i < actuator_count; ++i) {
 		ActuatorVector positive = actuator;
-		ActuatorVector negative = actuator;
 		positive(i) += epsilon;
-		negative(i) -= epsilon;
-		const WrenchVector derivative = (computeWrench(positive) - computeWrench(negative)) / (2.f * epsilon);
+		const WrenchVector derivative = (computeWrench(positive) - current_wrench) / epsilon;
 
 		for (int n = 0; n < NUM_AXES; ++n) {
 			jacobian(n, i) = derivative(n);

@@ -166,6 +166,9 @@ MulticopterAttitudeControl::generate_attitude_setpoint(const Quatf &q, float dt)
 	 */
 	_man_roll_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
 	_man_pitch_input_filter.setParameters(dt, _param_mc_man_tilt_tau.get());
+	// 此滤波只作用于 AUX 姿态偏置，不改变普通 Roll/Pitch 摇杆的响应速度。
+	_aux_roll_input_filter.setParameters(dt, _param_mc_aux_att_tau.get());
+	_aux_pitch_input_filter.setParameters(dt, _param_mc_aux_att_tau.get());
 
 	// ===== 摇杆部分: 决定期望"运动方向" =====
 	// 沿用 PX4 原始语义: 摇杆 (roll, pitch) 形成 2D 向量, 模长决定倾角大小,
@@ -187,9 +190,14 @@ MulticopterAttitudeControl::generate_attitude_setpoint(const Quatf &q, float dt)
 	Quatf q_rp_aux(1.f, 0.f, 0.f, 0.f);
 
 	if (_param_mc_aux_att_en.get() != 0) {
-		const float roll_aux  = _manual_control_setpoint.aux5 * _aux_roll_max;
-		const float pitch_aux = -_manual_control_setpoint.aux6 * _aux_pitch_max;
+		// 平滑旋钮量化造成的小台阶，避免姿态偏置突然变化。
+		const float roll_aux  = _aux_roll_input_filter.update(_manual_control_setpoint.aux5) * _aux_roll_max;
+		const float pitch_aux = -_aux_pitch_input_filter.update(_manual_control_setpoint.aux6) * _aux_pitch_max;
 		q_rp_aux = AxisAnglef(roll_aux, pitch_aux, 0.f);
+
+	} else {
+		_aux_roll_input_filter.reset(0.f);
+		_aux_pitch_input_filter.reset(0.f);
 	}
 
 	// ===== 四元数合成: q_aux ∘ q_stick =====

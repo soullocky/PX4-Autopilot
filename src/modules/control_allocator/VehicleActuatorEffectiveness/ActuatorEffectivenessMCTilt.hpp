@@ -56,9 +56,15 @@ public:
 		normalize[0] = true;
 	}
 
+	/**
+	 * 使用非线性迭代联合分配四个电机推力和四个单轴倾转舵机。
+	 * @param control_sp 期望六维控制量，顺序为 Mx、My、Mz、Fx、Fy、Fz
+	 * @param actuator_sp 输出执行器设定值，顺序为电机在前、倾转舵机在后
+	 */
 	void updateSetpoint(const matrix::Vector<float, NUM_AXES> &control_sp, int matrix_index,
 			    ActuatorVector &actuator_sp, const matrix::Vector<float, NUM_ACTUATORS> &actuator_min,
 			    const matrix::Vector<float, NUM_ACTUATORS> &actuator_max) override;
+	/** 保存输出层限速、限幅后的真实执行器指令，作为下一周期非线性求解初值。 */
 	void setAppliedSetpoint(int matrix_index, const ActuatorVector &actuator_sp) override;
 
 	const char *name() const override { return "MC Tilt"; }
@@ -69,8 +75,12 @@ protected:
 	using WrenchVector = matrix::Vector<float, NUM_AXES>;
 	using Jacobian = matrix::Matrix<float, NUM_AXES, NUM_ACTUATORS>;
 
+	/** 根据当前电机推力和单轴倾转角计算机体系六维合力/力矩。 */
 	WrenchVector computeWrench(const ActuatorVector &actuator) const;
-	void computeJacobian(const ActuatorVector &actuator, Jacobian &jacobian) const;
+	/**
+	 * 使用当前输出和前向差分计算雅可比矩阵，复用 current_wrench 以降低 rate_ctrl 负载。
+	 */
+	void computeJacobian(const ActuatorVector &actuator, const WrenchVector &current_wrench, Jacobian &jacobian) const;
 	matrix::Vector3f rotorAxis(int rotor_index, const ActuatorVector &actuator) const;
 	float servoAngle(int servo_index, float setpoint) const;
 
