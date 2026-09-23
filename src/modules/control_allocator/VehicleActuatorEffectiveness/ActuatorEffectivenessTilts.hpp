@@ -52,6 +52,7 @@ public:
 		YawAndPitch = 3,
 		Roll = 4,
 		RollAndPitch = 5,
+		YawAndRoll = 6,
 	};
 
 	enum class TiltAxis {

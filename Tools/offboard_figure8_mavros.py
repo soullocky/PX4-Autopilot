@@ -5,7 +5,8 @@
 Recommended real-flight workflow:
   1. Take off manually in Position mode and establish a stable hover.
   2. Start this node. It captures the current local pose as the trajectory center.
-  3. The node pre-streams a hold setpoint and optionally requests OFFBOARD.
+  3. The node pre-streams a hold setpoint and waits for the pilot to switch
+     to OFFBOARD using the RC mode switch. It never changes flight mode.
   4. The vehicle follows a smooth Gerono figure eight, returns to the center,
      and keeps publishing a hold setpoint until the pilot changes mode.
 
@@ -25,7 +26,6 @@ import threading
 import rospy
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import PositionTarget, State
-from mavros_msgs.srv import SetMode
 from std_msgs.msg import String
 from tf.transformations import euler_from_quaternion, quaternion_from_euler
 
@@ -37,6 +37,10 @@ class FigureEightOffboard(object):
         # Gentle defaults for the first real-flight test. Increase only after
         # checking tracking error, actuator saturation, and motion-capture delay.
         self.rate_hz = float(rospy.get_param('~rate', 50.0))
+        # 八字轨迹的长、宽在这里设置，单位均为米（相对于启动时的悬停中心）：
+        # x(t)=amplitude_x*sin(theta)，所以总长度=2*amplitude_x；默认 2.0 m。
+        # y(t)=0.5*amplitude_y*sin(2*theta)，所以总宽度=amplitude_y；默认 0.6 m。
+        # 若 align_with_initial_yaw=True，长轴会随起始偏航角旋转，而非固定沿 ENU 的 x 轴。
         self.amplitude_x = float(rospy.get_param('~amplitude_x', 1.0))
         self.amplitude_y = float(rospy.get_param('~amplitude_y', 0.60))
         self.period = float(rospy.get_param('~period', 18.0))
@@ -45,11 +49,9 @@ class FigureEightOffboard(object):
         self.prestream_time = float(rospy.get_param('~prestream_time', 3.0))
         self.settle_time = float(rospy.get_param('~settle_time', 4.0))
         self.final_hold_time = float(rospy.get_param('~final_hold_time', 5.0))
-        self.offboard_timeout = float(rospy.get_param('~offboard_timeout', 10.0))
         self.pose_timeout = float(rospy.get_param('~pose_timeout', 0.5))
         self.max_tracking_error = float(rospy.get_param('~max_tracking_error', 1.0))
         self.error_timeout = float(rospy.get_param('~error_timeout', 0.6))
-        self.request_offboard = bool(rospy.get_param('~request_offboard', True))
         self.require_armed = bool(rospy.get_param('~require_armed', True))
         self.use_velocity_ff = bool(rospy.get_param('~use_velocity_ff', True))
         self.use_acceleration_ff = bool(rospy.get_param('~use_acceleration_ff', False))
@@ -86,7 +88,6 @@ class FigureEightOffboard(object):
         rospy.Subscriber('mavros/state', State, self._state_callback, queue_size=10)
         rospy.Subscriber('mavros/local_position/pose', PoseStamped,
                          self._pose_callback, queue_size=20)
-        self._set_mode = rospy.ServiceProxy('mavros/set_mode', SetMode)
 
     def _state_callback(self, msg):
         with self._lock:
@@ -128,7 +129,9 @@ class FigureEightOffboard(object):
         omega = 2.0 * math.pi / self.period
         theta = omega * t
 
-        # Gerono lemniscate: x=A*sin(theta), y=B*sin(theta)*cos(theta).
+        # Gerono 八字：x=A*sin(theta)，y=(B/2)*sin(2*theta)。
+        # A 是长轴半幅、B 是短轴总宽；稳态轨迹的包络尺寸为 2A × B。
+        # 起止阶段的平滑包络 env 会暂时缩小轨迹，不改变设定的最大长宽。
         base_x = self.amplitude_x * math.sin(theta)
         base_y = 0.5 * self.amplitude_y * math.sin(2.0 * theta)
         base_vx = self.amplitude_x * omega * math.cos(theta)
@@ -238,33 +241,25 @@ class FigureEightOffboard(object):
             self._publish_reference(*hold)
             rate.sleep()
 
-    def _enter_offboard(self):
-        if not self.request_offboard:
-            rospy.logwarn('Automatic OFFBOARD request disabled; waiting for pilot mode switch.')
-
+    def _wait_for_pilot_offboard(self):
+        """Continuously stream a hold target until the RC switch enters OFFBOARD."""
         self._publish_phase('WAIT_OFFBOARD')
+        rospy.loginfo('Hold setpoints are streaming. Switch to OFFBOARD with the RC when ready.')
         rate = rospy.Rate(self.rate_hz)
-        deadline = rospy.Time.now() + rospy.Duration(self.offboard_timeout)
-        last_request = rospy.Time(0)
         hold = self._hold_reference()
 
-        while not rospy.is_shutdown() and rospy.Time.now() < deadline:
+        while not rospy.is_shutdown():
             self._publish_reference(*hold)
-            state, _, _ = self._snapshot()
+            state, _, pose_time = self._snapshot()
+            if not state.connected or (rospy.Time.now() - pose_time).to_sec() > self.pose_timeout:
+                rospy.logerr('FCU connection or local pose lost while waiting for OFFBOARD.')
+                return False
+            if self.require_armed and not state.armed:
+                rospy.logerr('Vehicle disarmed while waiting for OFFBOARD.')
+                return False
             if state.mode == 'OFFBOARD':
                 return True
-
-            if self.request_offboard and (rospy.Time.now() - last_request).to_sec() > 1.0:
-                try:
-                    response = self._set_mode(base_mode=0, custom_mode='OFFBOARD')
-                    if not response.mode_sent:
-                        rospy.logwarn('FCU rejected OFFBOARD request')
-                except rospy.ServiceException as exc:
-                    rospy.logwarn('OFFBOARD service call failed: %s', exc)
-                last_request = rospy.Time.now()
             rate.sleep()
-
-        rospy.logerr('OFFBOARD was not entered within %.1f s', self.offboard_timeout)
         return False
 
     def _tracking_is_safe(self, reference):
@@ -329,6 +324,10 @@ class FigureEightOffboard(object):
         rate = rospy.Rate(self.rate_hz)
         start = rospy.Time.now()
         while not rospy.is_shutdown():
+            state, _, _ = self._snapshot()
+            if state.mode != 'OFFBOARD':
+                rospy.loginfo('Pilot left OFFBOARD; figure-eight node is stopping.')
+                return
             self._publish_reference(*self._hold_reference())
             if initial_seconds is not None:
                 elapsed = (rospy.Time.now() - start).to_sec()
@@ -348,10 +347,15 @@ class FigureEightOffboard(object):
             return
 
         self._stream_hold_for(self.prestream_time, 'PRESTREAM')
-        if not self._enter_offboard():
+        if not self._wait_for_pilot_offboard():
             return
 
         self._stream_hold_for(self.settle_time, 'SETTLE')
+        state, _, pose_time = self._snapshot()
+        if (not state.connected or state.mode != 'OFFBOARD' or (self.require_armed and not state.armed)
+                or (rospy.Time.now() - pose_time).to_sec() > self.pose_timeout):
+            rospy.logwarn('OFFBOARD, arming, or local pose lost during settling; trajectory not started.')
+            return
         success = self._run_trajectory()
         if not success:
             self._abort_to_current_hold()

@@ -397,6 +397,7 @@ parameters:
                 3: 'Yaw and Pitch'
                 4: 'Roll'
                 5: 'Roll and Pitch'
+                6: 'Yaw and Roll'
             num_instances: *max_num_tilts
             instance_start: 0
             default: 1
@@ -638,6 +639,38 @@ parameters:
 
     - group: Tiltquad
       definitions:
+        CA_TQ_MBAL:
+            description:
+                short: Tiltquad motor balance gain
+                long: |
+                  Soft secondary objective for the nonlinear Tiltquad allocator.
+                  It reduces large differences between motor thrust commands by
+                  shifting compatible yaw effort to the tilt servos. It does not
+                  impose a hard motor minimum or guarantee equal motor speeds.
+                  Requires four inner tilt servos configured as Yaw and Roll. Start at 0.03
+                  after checking servo directions without propellers. Set to 0
+                  to restore the previous allocation behavior.
+            type: float
+            min: 0
+            max: 0.1
+            decimal: 3
+            default: 0
+
+        CA_TQ_PIT_DW:
+            description:
+                short: Tiltquad pitch differential mobility
+                long: |
+                  Relative mobility of differential motion between the four
+                  outer Pitch-like tilt servos. Common pitch motion is not
+                  affected. Values below 1 make the lighter inner Roll-like
+                  servos preferred for yaw when they use Yaw and Roll control.
+                  Set to 1 to restore equal actuator weighting.
+            type: float
+            min: 0.05
+            max: 1
+            decimal: 2
+            default: 0.2
+
         CA_TILTQUAD_MODE:
             description:
                 short: Tiltquad flight mode

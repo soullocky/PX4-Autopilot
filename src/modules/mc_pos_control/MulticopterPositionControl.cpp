@@ -657,10 +657,9 @@ void MulticopterPositionControl::Run()
 					_aux_pitch_input_filter.reset(0.f);
 				}
 
-				const matrix::Quatf attitude_yaw{cosf(local_pos_sp.yaw * 0.5f), 0.f, 0.f,
-								 sinf(local_pos_sp.yaw * 0.5f)};
-				const matrix::Quatf attitude_bias = matrix::AxisAnglef{roll_bias, pitch_bias, 0.f};
-				const matrix::Quatf attitude_sp = attitude_yaw * attitude_bias;
+				// 双轴姿态用固定航向的 3-2-1 顺序构造；水平轴角合成会在同时 Roll/Pitch 时额外改变偏航期望。
+				// 单轴输入时与原有轴角结果相同，不改变已验证的单俯仰/单滚转控制方向。
+				const matrix::Quatf attitude_sp{matrix::Eulerf{roll_bias, pitch_bias, local_pos_sp.yaw}};
 				attitude_sp.copyTo(attitude_setpoint.q_d);
 
 				// 将位置环的 NED 合力转换到带姿态偏置的机体系，补偿变姿造成的位置扰动。

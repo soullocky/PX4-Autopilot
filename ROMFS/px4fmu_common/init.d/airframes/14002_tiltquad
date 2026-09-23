@@ -63,7 +63,8 @@ param set-default CA_ROTOR3_TP 4
 # Tilt servo layout: [TL0 roll, TL1 pitch, TL2 roll, TL3 pitch, TL4 roll, TL5 pitch, TL6 roll, TL7 pitch]
 param set-default CA_SV_TL_COUNT 8
 # TL0: M1 Roll Servo
-param set-default CA_SV_TL0_CT 4    # Roll
+# 内层小惯量 Roll-like 机构优先承担滚转和快速偏航。
+param set-default CA_SV_TL0_CT 6    # Yaw and Roll
 param set-default CA_SV_TL0_AX 1
 param set-default CA_SV_TL0_MINA -20
 param set-default CA_SV_TL0_MAXA 20
@@ -72,6 +73,7 @@ param set-default CA_SV_TL0_TD 90
 param set-default CA_SV0_SLEW 1.5
 
 # M1 Pitch Servo (PWM 6)
+# 外层大惯量 Pitch-like 机构主要承担共同俯仰变姿。
 param set-default CA_SV_TL1_CT 2
 param set-default CA_SV_TL1_AX 0
 param set-default CA_SV_TL1_MINA -20
@@ -82,7 +84,7 @@ param set-default CA_SV1_SLEW 1.5
 
 # ---- Motor 2 Tilt Servos ----
 # M2 Roll Servo (PWM 7)
-param set-default CA_SV_TL2_CT 4
+param set-default CA_SV_TL2_CT 6
 param set-default CA_SV_TL2_AX 1
 param set-default CA_SV_TL2_MINA -20
 param set-default CA_SV_TL2_MAXA 20
@@ -99,7 +101,7 @@ param set-default CA_SV3_SLEW 1.5
 
 # ---- Motor 3 Tilt Servos ----
 # M3 Roll Servo (PWM 9)
-param set-default CA_SV_TL4_CT 4
+param set-default CA_SV_TL4_CT 6
 param set-default CA_SV_TL4_AX 1
 param set-default CA_SV_TL4_MINA -20
 param set-default CA_SV_TL4_MAXA 20
@@ -116,7 +118,7 @@ param set-default CA_SV5_SLEW 1.5
 
 # ---- Motor 4 Tilt Servos ----
 # M4 Roll Servo (PWM 11)
-param set-default CA_SV_TL6_CT 4
+param set-default CA_SV_TL6_CT 6
 param set-default CA_SV_TL6_AX 1
 param set-default CA_SV_TL6_MINA -20
 param set-default CA_SV_TL6_MAXA 20

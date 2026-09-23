@@ -133,7 +133,15 @@ void ActuatorEffectivenessTilts::updateTorqueSign(const ActuatorEffectivenessRot
 		    && _params[roll_index].axis == TiltAxis::RollLike) {
 			const Control control = _params[roll_index].control;
 
-			if (control == Control::Roll || control == Control::RollAndPitch) {
+			if (control == Control::Yaw || control == Control::YawAndRoll) {
+				// Roll-like 倾转产生 Fy，并通过旋翼前后力臂 x*Fy 形成偏航力矩。
+				const float direction = math::radians((float)_params[roll_index].tilt_direction);
+				const Vector3f rotated_pos = Dcmf{Eulerf{0.f, 0.f, -direction}} * rotor.position;
+				_torque[roll_index](2) = rotated_pos(1) < -0.01f ? 1.f :
+							 (rotated_pos(1) > 0.01f ? -1.f : 0.f);
+			}
+
+			if (control == Control::Roll || control == Control::RollAndPitch || control == Control::YawAndRoll) {
 				const float y = rotor.position(1);
 				_torque[roll_index](0) = y > 0.01f ? 1.f : (y < -0.01f ? -1.f : 0.f);
 			}
@@ -144,7 +152,8 @@ void ActuatorEffectivenessTilts::updateTorqueSign(const ActuatorEffectivenessRot
 bool ActuatorEffectivenessTilts::hasYawControl() const
 {
 	for (int i = 0; i < _count; i++) {
-		if (_params[i].control == Control::Yaw || _params[i].control == Control::YawAndPitch) {
+		if (_params[i].control == Control::Yaw || _params[i].control == Control::YawAndPitch
+		    || _params[i].control == Control::YawAndRoll) {
 			return true;
 		}
 	}

@@ -120,6 +120,28 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 	constexpr float servo_step = 0.03f;
 	// 当执行器行程不足时，优先保持姿态和升力，允许水平位置误差暂时增大。
 	constexpr float axis_weight[NUM_AXES] {3.f, 3.f, 4.f, 0.5f, 0.5f, 3.f};
+	constexpr int num_tiltquad_rotors = 4;
+	int roll_servo_indices[num_tiltquad_rotors] {-1, -1, -1, -1};
+	int pitch_servo_indices[num_tiltquad_rotors] {-1, -1, -1, -1};
+	bool roll_yaw_configured = _mc_rotors.geometry().num_rotors == num_tiltquad_rotors
+				   && _first_tilt_idx == num_tiltquad_rotors && _tilts.count() >= 8;
+
+	for (int rotor = 0; rotor < num_tiltquad_rotors && roll_yaw_configured; ++rotor) {
+		const auto &rotor_config = _mc_rotors.geometry().rotors[rotor];
+		roll_servo_indices[rotor] = rotor_config.tilt_index_roll >= 0 ? rotor_config.tilt_index_roll * 2 : -1;
+		pitch_servo_indices[rotor] = rotor_config.tilt_index_pitch >= 0 ? rotor_config.tilt_index_pitch * 2 + 1 : -1;
+		const int roll_servo = roll_servo_indices[rotor];
+		const int pitch_servo = pitch_servo_indices[rotor];
+
+		roll_yaw_configured &= roll_servo >= 0 && roll_servo < _tilts.count()
+				       && pitch_servo >= 0 && pitch_servo < _tilts.count();
+
+		if (roll_yaw_configured) {
+			roll_yaw_configured &= _tilts.config(roll_servo).axis == ActuatorEffectivenessTilts::TiltAxis::RollLike
+					       && _tilts.config(roll_servo).control == ActuatorEffectivenessTilts::Control::YawAndRoll
+					       && _tilts.config(pitch_servo).axis == ActuatorEffectivenessTilts::TiltAxis::PitchLike;
+		}
+	}
 
 	for (int iteration = 0; iteration < iterations; ++iteration) {
 		const WrenchVector current_wrench = computeWrench(solution);
@@ -138,8 +160,41 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 			}
 		}
 
-		// J^T (J J^T + lambda^2 I)^-1：秩不足时仍能得到连续的阻尼最小二乘解。
-		matrix::SquareMatrix<float, NUM_AXES> normal_matrix = weighted_jacobian * weighted_jacobian.transpose();
+		bool roll_yaw_available = roll_yaw_configured;
+
+		for (int rotor = 0; rotor < num_tiltquad_rotors && roll_yaw_available; ++rotor) {
+			const int actuator_index = _first_tilt_idx + roll_servo_indices[rotor];
+			// 内层机构接近限位时恢复等权分配，让外层机构作为偏航备用。
+			roll_yaw_available &= solution(actuator_index) > actuator_min(actuator_index) + 0.1f
+					      && solution(actuator_index) < actuator_max(actuator_index) - 0.1f;
+		}
+
+		matrix::Matrix<float, NUM_ACTUATORS, NUM_AXES> mobility_jacobian_transpose = weighted_jacobian.transpose();
+
+		if (roll_yaw_available) {
+			const float pitch_differential_mobility = math::constrain(_param_ca_tq_pit_dw.get(), 0.05f, 1.f);
+
+			for (int axis = 0; axis < NUM_AXES; ++axis) {
+				float pitch_common = 0.f;
+
+				for (int rotor = 0; rotor < num_tiltquad_rotors; ++rotor) {
+					pitch_common += mobility_jacobian_transpose(_first_tilt_idx + pitch_servo_indices[rotor], axis);
+				}
+
+				pitch_common /= (float)num_tiltquad_rotors;
+
+				for (int rotor = 0; rotor < num_tiltquad_rotors; ++rotor) {
+					const int actuator_index = _first_tilt_idx + pitch_servo_indices[rotor];
+					const float pitch_differential = mobility_jacobian_transpose(actuator_index, axis) - pitch_common;
+					// 仅降低外层四舵机的差动自由度，共同俯仰变姿的响应保持不变。
+					mobility_jacobian_transpose(actuator_index, axis) = pitch_common
+							+ pitch_differential_mobility * pitch_differential;
+				}
+			}
+		}
+
+		// D J^T (J D J^T + lambda^2 I)^-1：D 用于降低大惯量外层机构的差动代价。
+		matrix::SquareMatrix<float, NUM_AXES> normal_matrix = weighted_jacobian * mobility_jacobian_transpose;
 
 		for (int axis = 0; axis < NUM_AXES; ++axis) {
 			normal_matrix(axis, axis) += damping * damping;
@@ -151,7 +206,46 @@ void ActuatorEffectivenessTiltquad::updateSetpoint(const matrix::Vector<float, N
 			break;
 		}
 
-		const ActuatorVector delta = weighted_jacobian.transpose() * (normal_inverse * weighted_error);
+		ActuatorVector delta = mobility_jacobian_transpose * (normal_inverse * weighted_error);
+
+		// 偏航有舵机矢量控制余量时，将过大的电机推力差作为次级目标；不强制四电机等速。
+		// 投影到六维加权雅可比的近似零空间，避免直接削弱姿态、升力及位置主目标。
+		const float balance_gain = _param_ca_tq_mbal.get();
+
+		if (balance_gain > FLT_EPSILON && roll_yaw_available) {
+			float motor_sum = 0.f;
+			float motor_min = solution(0);
+			float motor_max = solution(0);
+			bool motors_available = true;
+
+			for (int rotor = 0; rotor < num_tiltquad_rotors; ++rotor) {
+				motors_available &= actuator_max(rotor) - actuator_min(rotor) > 0.5f;
+				motor_sum += solution(rotor);
+				motor_min = math::min(motor_min, solution(rotor));
+				motor_max = math::max(motor_max, solution(rotor));
+			}
+
+			// 小的正常电机差异不驱动额外的舵机运动；分化越严重，均衡作用越充分。
+			const float spread_scale = math::constrain((motor_max - motor_min - 0.2f) / 0.4f, 0.f, 1.f);
+
+			if (motors_available && spread_scale > FLT_EPSILON) {
+				ActuatorVector balance_direction;
+				balance_direction.setZero();
+				const float motor_mean = motor_sum * 0.25f;
+
+				for (int rotor = 0; rotor < num_tiltquad_rotors; ++rotor) {
+					balance_direction(rotor) = motor_mean - solution(rotor);
+				}
+
+				const WrenchVector balance_wrench = weighted_jacobian * balance_direction;
+				const ActuatorVector projected_balance = balance_direction
+					- mobility_jacobian_transpose * (normal_inverse * balance_wrench);
+
+				if (projected_balance.isAllFinite()) {
+					delta += balance_gain * spread_scale * projected_balance;
+				}
+			}
+		}
 
 		if (!delta.isAllFinite()) {
 			break;

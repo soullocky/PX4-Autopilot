@@ -116,4 +116,8 @@ protected:
 	bool _nonlinear_initialized{false};
 	int _first_tilt_idx{0};
 
+	DEFINE_PARAMETERS(
+		(ParamFloat<px4::params::CA_TQ_MBAL>) _param_ca_tq_mbal,
+		(ParamFloat<px4::params::CA_TQ_PIT_DW>) _param_ca_tq_pit_dw
+	)
 };
