@@ -68,6 +68,15 @@ void RateControl::setNegativeSaturationFlag(size_t axis, bool is_saturated)
 	}
 }
 
+void RateControl::relaxYawIntegral(float decay_rate, float unallocated_yaw, float dt)
+{
+	// 仅释放无法实现的同向积分；不改变正常飞行所需的稳态偏航配平。
+	if (PX4_ISFINITE(decay_rate) && PX4_ISFINITE(unallocated_yaw) && PX4_ISFINITE(dt)
+	    && decay_rate > 0.f && dt > 0.f && _rate_int(2) * unallocated_yaw > 0.f) {
+		_rate_int(2) *= 1.f - math::constrain(decay_rate * dt, 0.f, 0.05f);
+	}
+}
+
 Vector3f RateControl::update(const Vector3f &rate, const Vector3f &rate_sp, const Vector3f &angular_accel,
 			     const float dt, const bool landed)
 {

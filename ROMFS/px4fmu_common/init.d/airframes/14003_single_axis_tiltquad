@@ -23,6 +23,14 @@
 param set-default MAV_TYPE 2
 param set-default CA_AIRFRAME 8
 
+# 单轴电机均衡为实验性次级目标，默认关闭；确认舵机方向后再逐步启用。
+param set-default CA_MCT_MBAL 0
+# 舵机以期望合力方向为参考；电机均衡仍需实机逐步启用，避免同时改变多项参数。
+param set-default CA_MCT_SREF 0.20
+# 大角度滚转优先和偏航积分回退均需逐项验证，默认不改变已飞过的分配行为。
+param set-default CA_MCT_RPRI 0
+param set-default MC_MCT_YAW_AW 0
+
 # 单轴倾转四旋翼：每个电机直接关联一个独立倾转舵机。
 param set-default CA_ROTOR_COUNT 4
 param set-default CA_ROTOR0_PX 0.127

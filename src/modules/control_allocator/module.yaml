@@ -637,6 +637,74 @@ parameters:
                 1: Remove first failed motor from effectiveness
             default: 0
 
+    - group: MC Tilt
+      definitions:
+        CA_MCT_MBAL:
+            description:
+                short: Single-axis tilt motor balance gain
+                long: |
+                  Soft secondary objective for the four-motor, four-servo MC Tilt
+                  allocator. It shifts persistent motor command differences to
+                  the Yaw and Pitch tilt servos when they have travel available.
+                  Motor commands are filtered with a 0.35 s time constant.
+                  Balance fades in for command spread from 0.2 to 0.4.
+                  This balance objective and an additional soft reserve
+                  below min(0.15, half the mean motor command) discourage loss
+                  of low-end authority. This is not a hard minimum output.
+                  The primary attitude and thrust allocation remains higher
+                  priority. This does not force equal motor speeds or compensate
+                  for incorrect geometry, airflow interference, or vibration.
+                  The gain is applied per second, independent of allocator rate.
+                  Keep at 0 until the servo directions and low-angle flight
+                  behavior have been verified; set back to 0 to disable.
+            type: float
+            min: 0
+            max: 1
+            decimal: 2
+            increment: 0.05
+            unit: 1/s
+            default: 0
+
+        # 合力方向参考替代逐周期机械回零，避免大俯仰悬停时与电机均衡互相抵消。
+        CA_MCT_SREF:
+            description:
+                short: MC Tilt servo force-reference gain
+                long: |
+                  Secondary objective for four independent Yaw and Pitch servos.
+                  Slowly bias tilt angles toward the requested body-force
+                  direction, projected into the approximate allocation nullspace
+                  together with motor balancing. Required torque-producing tilt
+                  differences remain available. Near zero thrust the reference
+                  smoothly returns to mechanical zero.
+                  The gain is applied per second. Zero disables this reference;
+                  it does not restore the old per-cycle mechanical-zero pull.
+                  Servo output rate is still limited by CA_SVx_SLEW, which is
+                  full-travel time in seconds (larger means slower).
+            type: float
+            min: 0
+            max: 1
+            decimal: 2
+            increment: 0.05
+            unit: 1/s
+            default: 0.20
+
+        CA_MCT_RPRI:
+            description:
+                short: MC Tilt roll-priority reserve
+                long: |
+                  Experimental four-motor/four-servo MC Tilt allocation adjustment.
+                  When pitch tilt is above 15 degrees, a motor approaches its
+                  lower output limit, and roll torque is not fully allocated,
+                  smoothly reduce the yaw allocation weight to preserve roll.
+                  The yaw weight remains nonzero. This can increase yaw error;
+                  test only at low tilt angle first. Set to 0 to disable.
+            type: float
+            min: 0
+            max: 1
+            decimal: 2
+            increment: 0.05
+            default: 0
+
     - group: Tiltquad
       definitions:
         CA_TQ_MBAL:

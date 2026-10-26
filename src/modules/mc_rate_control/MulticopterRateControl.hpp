@@ -48,6 +48,7 @@
 #include <uORB/Subscription.hpp>
 #include <uORB/SubscriptionCallback.hpp>
 #include <uORB/topics/actuator_controls_status.h>
+#include <uORB/topics/actuator_motors.h>
 #include <uORB/topics/battery_status.h>
 #include <uORB/topics/control_allocator_status.h>
 #include <uORB/topics/manual_control_setpoint.h>
@@ -93,6 +94,7 @@ private:
 	RateControl _rate_control; ///< class for rate control calculations
 
 	uORB::Subscription _battery_status_sub{ORB_ID(battery_status)};
+	uORB::Subscription _actuator_motors_sub{ORB_ID(actuator_motors)};
 	uORB::Subscription _control_allocator_status_sub{ORB_ID(control_allocator_status)};
 	uORB::Subscription _manual_control_setpoint_sub{ORB_ID(manual_control_setpoint)};
 	uORB::Subscription _vehicle_control_mode_sub{ORB_ID(vehicle_control_mode)};
@@ -112,6 +114,8 @@ private:
 
 	vehicle_control_mode_s	_vehicle_control_mode{};
 	vehicle_status_s	_vehicle_status{};
+	control_allocator_status_s _last_allocator_status{};
+	actuator_motors_s _actuator_motors{};
 
 	bool _landed{true};
 	bool _maybe_landed{true};
@@ -154,6 +158,10 @@ private:
 		(ParamFloat<px4::params::MC_YAWRATE_FF>) _param_mc_yawrate_ff,
 		(ParamFloat<px4::params::MC_YAWRATE_K>) _param_mc_yawrate_k,
 		(ParamFloat<px4::params::MC_YAW_TQ_CUTOFF>) _param_mc_yaw_tq_cutoff,
+		(ParamFloat<px4::params::MC_MCT_YAW_AW>) _param_mc_mct_yaw_aw,
+		(ParamInt<px4::params::CA_AIRFRAME>) _param_ca_airframe,
+		(ParamInt<px4::params::CA_ROTOR_COUNT>) _param_ca_rotor_count,
+		(ParamInt<px4::params::CA_SV_TL_COUNT>) _param_ca_sv_tl_count,
 
 		(ParamFloat<px4::params::MC_ACRO_R_MAX>) _param_mc_acro_r_max,
 		(ParamFloat<px4::params::MC_ACRO_P_MAX>) _param_mc_acro_p_max,

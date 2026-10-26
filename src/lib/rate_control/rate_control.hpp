@@ -114,6 +114,9 @@ public:
 		}
 	}
 
+	/** 当偏航力矩无法分配且偏航积分仍在同方向施力时，按时间常数缓慢释放已有积分。 */
+	void relaxYawIntegral(float decay_rate, float unallocated_yaw, float dt);
+
 	/**
 	 * Get status message of controller for logging/debugging
 	 * @param rate_ctrl_status status message to fill with internal states

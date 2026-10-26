@@ -36,6 +36,7 @@
 #include "control_allocation/actuator_effectiveness/ActuatorEffectiveness.hpp"
 #include "ActuatorEffectivenessRotors.hpp"
 #include "ActuatorEffectivenessTilts.hpp"
+#include <drivers/drv_hrt.h>
 #include <matrix/matrix/PseudoInverse.hpp>
 
 class ActuatorEffectivenessMCTilt : public ModuleParams, public ActuatorEffectiveness
@@ -74,6 +75,10 @@ public:
 protected:
 	using WrenchVector = matrix::Vector<float, NUM_AXES>;
 	using Jacobian = matrix::Matrix<float, NUM_AXES, NUM_ACTUATORS>;
+	/** 显式传入周期用于按秒计算次级修正，也便于离线重放实际分配器。 */
+	void updateSetpointWithDt(const matrix::Vector<float, NUM_AXES> &control_sp,
+				  ActuatorVector &actuator_sp, const ActuatorVector &actuator_min,
+				  const ActuatorVector &actuator_max, float dt);
 
 	/** 根据当前电机推力和单轴倾转角计算机体系六维合力/力矩。 */
 	WrenchVector computeWrench(const ActuatorVector &actuator) const;
@@ -90,6 +95,20 @@ protected:
 	ActuatorVector _nonlinear_sp{};
 	WrenchVector _requested_wrench{};
 	WrenchVector _achieved_wrench{};
+	// 单轴构型仅对持续的电机差速进行低频均衡，不跟随角速度环的高频修正。
+	matrix::Vector<float, 4> _balance_motor_filtered{};
+	bool _balance_filter_initialized{false};
+	// 舵机参考与电机均衡共用真实周期，避免控制频率改变回中强度。
+	hrt_abstime _secondary_last_update{0};
+	// 电机接近低端且滚转分配不足时，缓变地降低偏航分配权重。
+	float _roll_priority_filtered{0.f};
+	hrt_abstime _priority_last_update{0};
 	bool _nonlinear_initialized{false};
 	int _first_tilt_idx{0};
+
+	DEFINE_PARAMETERS(
+		(ParamFloat<px4::params::CA_MCT_MBAL>) _param_ca_mct_mbal,
+		(ParamFloat<px4::params::CA_MCT_SREF>) _param_ca_mct_sref,
+		(ParamFloat<px4::params::CA_MCT_RPRI>) _param_ca_mct_rpri
+	)
 };

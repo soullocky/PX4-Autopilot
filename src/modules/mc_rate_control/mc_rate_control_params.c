@@ -51,6 +51,24 @@
 PARAM_DEFINE_FLOAT(MC_ROLLRATE_P, 0.15f);
 
 /**
+ * MC Tilt yaw integral relaxation rate
+ *
+ * Experimental anti-windup for the four-motor/four-servo MC Tilt only. When a
+ * motor approaches its lower output limit and roll and yaw torque cannot both
+ * be allocated, gradually relax the yaw integral only if it pushes in the
+ * unallocated yaw direction. Does not change ordinary multicopters or Tiltquad.
+ * Keep at 0 until low-angle tests have been completed.
+ *
+ * @min 0
+ * @max 1
+ * @unit 1/s
+ * @decimal 2
+ * @increment 0.05
+ * @group MC Tilt
+ */
+PARAM_DEFINE_FLOAT(MC_MCT_YAW_AW, 0.f);
+
+/**
  * Roll rate I gain
  *
  * Roll rate integral gain. Can be set to compensate static thrust difference or gravity center offset.

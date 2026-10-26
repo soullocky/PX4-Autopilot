@@ -194,18 +194,18 @@ MulticopterRateControl::Run()
 			}
 
 			// update saturation status from control allocation feedback
-			control_allocator_status_s control_allocator_status;
-
-			if (_control_allocator_status_sub.update(&control_allocator_status)) {
+			if (_control_allocator_status_sub.update(&_last_allocator_status)) {
 				Vector<bool, 3> saturation_positive;
 				Vector<bool, 3> saturation_negative;
+				saturation_positive.setZero();
+				saturation_negative.setZero();
 
-				if (!control_allocator_status.torque_setpoint_achieved) {
+				if (!_last_allocator_status.torque_setpoint_achieved) {
 					for (size_t i = 0; i < 3; i++) {
-						if (control_allocator_status.unallocated_torque[i] > FLT_EPSILON) {
+						if (_last_allocator_status.unallocated_torque[i] > FLT_EPSILON) {
 							saturation_positive(i) = true;
 
-						} else if (control_allocator_status.unallocated_torque[i] < -FLT_EPSILON) {
+						} else if (_last_allocator_status.unallocated_torque[i] < -FLT_EPSILON) {
 							saturation_negative(i) = true;
 						}
 					}
@@ -213,6 +213,37 @@ MulticopterRateControl::Run()
 
 				// TODO: send the unallocated value directly for better anti-windup
 				_rate_control.setSaturationStatus(saturation_positive, saturation_negative);
+			}
+
+			// 单轴 MCTilt 专用：滚转与偏航同时欠分配且电机贴近低端时，缓慢释放无法实现的偏航积分。
+			// 默认关闭；不改变双轴 Tiltquad 以及其他多旋翼的角速度环。
+			if (_param_mc_mct_yaw_aw.get() > FLT_EPSILON && _param_ca_airframe.get() == 8
+			    && _param_ca_rotor_count.get() == 4 && _param_ca_sv_tl_count.get() == 4
+			    && _vehicle_control_mode.flag_armed && !_landed && !_maybe_landed) {
+				_actuator_motors_sub.update(&_actuator_motors);
+				const hrt_abstime check_time = hrt_absolute_time();
+				const bool fresh_allocator = _last_allocator_status.timestamp > 0
+							     && check_time >= _last_allocator_status.timestamp
+							     && check_time - _last_allocator_status.timestamp < 100_ms;
+				const bool fresh_motors = _actuator_motors.timestamp > 0 && check_time >= _actuator_motors.timestamp
+							  && check_time - _actuator_motors.timestamp < 100_ms;
+
+				if (fresh_allocator && fresh_motors && !_last_allocator_status.torque_setpoint_achieved
+				    && fabsf(_last_allocator_status.unallocated_torque[0]) > 0.004f
+				    && fabsf(_last_allocator_status.unallocated_torque[2]) > 0.008f) {
+					float lowest_motor = FLT_MAX;
+					bool motors_valid = true;
+
+					for (int i = 0; i < 4; ++i) {
+						motors_valid &= PX4_ISFINITE(_actuator_motors.control[i]);
+						lowest_motor = math::min(lowest_motor, _actuator_motors.control[i]);
+					}
+
+					if (motors_valid && lowest_motor < 0.18f) {
+						_rate_control.relaxYawIntegral(_param_mc_mct_yaw_aw.get(),
+										     _last_allocator_status.unallocated_torque[2], dt);
+					}
+				}
 			}
 
 			// run rate controller

@@ -690,7 +690,7 @@ void MulticopterPositionControl::Run()
 				// 单轴机型仅过滤 AUX6 的俯仰偏置，AUX5 不参与该构型。
 				_aux_pitch_input_filter.setParameters(dt, _param_mc_aux_att_tau.get());
 
-				// 单轴俯仰倾转：AUX6 控制 Pitch，Roll 仍用于传统侧向位置控制。
+				// 单轴俯仰倾转：AUX6 控制 Pitch，侧向位置力仍需通过机体 Roll 产生。
 				const matrix::Eulerf conventional_attitude{matrix::Quatf{attitude_setpoint.q_d}};
 				float pitch_bias = 0.f;
 
@@ -704,12 +704,30 @@ void MulticopterPositionControl::Run()
 
 				const matrix::Quatf attitude_yaw{cosf(local_pos_sp.yaw * 0.5f), 0.f, 0.f,
 								 sinf(local_pos_sp.yaw * 0.5f)};
-				const matrix::Quatf attitude_rp{matrix::Eulerf{conventional_attitude.phi(), pitch_bias, 0.f}};
+				float roll_sp = conventional_attitude.phi();
+				const float cos_yaw = cosf(local_pos_sp.yaw);
+				const float sin_yaw = sinf(local_pos_sp.yaw);
+				const float thrust_x_yaw = cos_yaw * local_pos_sp.thrust[0] + sin_yaw * local_pos_sp.thrust[1];
+				const float thrust_y_yaw = -sin_yaw * local_pos_sp.thrust[0] + cos_yaw * local_pos_sp.thrust[1];
+				const float pitch_plane_up = -sinf(pitch_bias) * thrust_x_yaw
+							    - cosf(pitch_bias) * local_pos_sp.thrust[2];
+
+				if (PX4_ISFINITE(thrust_y_yaw) && PX4_ISFINITE(pitch_plane_up)) {
+					// Pitch-like 舵机不能产生机体系 Fy；按当前 Pitch 反算 Roll，使期望合力的 Fy 为零。
+					// 接近侧向力奇异位形时保留正的分母，并沿用起飞/飞行阶段的滚转角限制。
+					const float roll_limit = math::min(_tilt_limit_slew_rate.getState(),
+									      math::radians(kTiltVectorNumericalAngleLimitDeg));
+					roll_sp = math::constrain(atan2f(thrust_y_yaw, math::max(pitch_plane_up, 0.02f)),
+								   -roll_limit, roll_limit);
+				}
+
+				const matrix::Quatf attitude_rp{matrix::Eulerf{roll_sp, pitch_bias, 0.f}};
 				const matrix::Quatf attitude_sp = attitude_yaw * attitude_rp;
 				attitude_sp.copyTo(attitude_setpoint.q_d);
 
-				// 前后合力由单轴矢量推力实现，侧向合力仍依赖机体 Roll。
+				// 前后合力由单轴矢量推力实现；不可控的 Fy 不再传给分配器。
 				matrix::Vector3f thrust_body = attitude_sp.inversed().rotateVector(matrix::Vector3f(local_pos_sp.thrust));
+				thrust_body(1) = 0.f;
 				// 单轴构型只限制 Fx；限值取四个 Pitch-like 舵机中最小的安全可用行程。
 				const float pitch_limit = math::min(
 								math::min(tiltServoLimitRad(_param_ca_sv_tl0_mina.get(), _param_ca_sv_tl0_maxa.get()),
