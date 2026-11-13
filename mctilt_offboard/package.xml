@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>mctilt_offboard</name>
+  <version>1.0.0</version>
+  <description>MCTilt MAVROS1 position/pitch tracking: figure eight and fixed-position pitch tests.</description>
+  <maintainer email="local-operator@example.com">Local Operator</maintainer>
+  <license>UNLICENSED</license>
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>geometry_msgs</depend>
+  <depend>mavros_msgs</depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>tf</depend>
+  <export/>
+</package>

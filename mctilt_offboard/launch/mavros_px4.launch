@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Start this only if no MAVROS instance is already connected to the FCU. -->
+  <arg name="fcu_url"/>
+  <arg name="gcs_url" default=""/>
+  <arg name="vehicle_ns" default="/"/>
+  <group ns="$(arg vehicle_ns)">
+    <include file="$(find mavros)/launch/px4.launch">
+      <arg name="fcu_url" value="$(arg fcu_url)"/>
+      <arg name="gcs_url" value="$(arg gcs_url)"/>
+    </include>
+  </group>
+</launch>

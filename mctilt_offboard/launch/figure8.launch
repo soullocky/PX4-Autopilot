@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Root namespace uses /mavros; set vehicle_ns for /uav1/mavros, etc. -->
+  <arg name="vehicle_ns" default="/"/>
+  <group ns="$(arg vehicle_ns)">
+    <node pkg="mctilt_offboard"
+          type="offboard_figure8.py"
+          name="mctilt_offboard"
+          output="screen">
+      <rosparam command="load" file="$(find mctilt_offboard)/config/figure8.yaml"/>
+    </node>
+  </group>
+</launch>

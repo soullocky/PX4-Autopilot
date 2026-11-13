@@ -40,6 +40,9 @@
 #include "PositionControl/PositionControl.hpp"
 #include "Takeoff/Takeoff.hpp"
 #include "GotoControl/GotoControl.hpp"
+#include "MctiltPitchReference.hpp"
+#include <uORB/topics/mctilt_offboard_pitch.h>
+#include <uORB/topics/mctilt_pitch_status.h>
 
 #include <drivers/drv_hrt.h>
 #include <lib/mathlib/math/filter/AlphaFilter.hpp>
@@ -91,6 +94,13 @@ public:
 
 private:
 	void Run() override;
+	// Offboard 外部俯仰独立校验时效，并与原有 AUX6 平滑切换。
+	float updateMctiltPitch(float manual_pitch, float dt);
+	MctiltPitchReference _mctilt_pitch_reference;
+	mctilt_offboard_pitch_s _mctilt_pitch_input{};
+	bool _mctilt_pitch_timed_out{false};
+	uORB::Subscription _mctilt_pitch_sub{ORB_ID(mctilt_offboard_pitch)};
+	uORB::Publication<mctilt_pitch_status_s> _mctilt_pitch_status_pub{ORB_ID(mctilt_pitch_status)};
 
 	TakeoffHandling _takeoff; /**< state machine and ramp to bring the vehicle off the ground without jumps */
 
@@ -135,6 +145,10 @@ private:
 	};
 
 	DEFINE_PARAMETERS(
+		(ParamInt<px4::params::MC_MCT_OBP_EN>) _param_mc_mct_obp_en,
+		(ParamFloat<px4::params::MC_MCT_OBP_MAX>) _param_mc_mct_obp_max,
+		(ParamFloat<px4::params::MC_MCT_OBP_RATE>) _param_mc_mct_obp_rate,
+		(ParamFloat<px4::params::MC_MCT_OBP_TMO>) _param_mc_mct_obp_tmo,
 		// Tiltquad 六自由度模式由控制分配构型自动启用。
 		(ParamInt<px4::params::CA_AIRFRAME>)       _param_ca_airframe,
 		(ParamInt<px4::params::CA_ROTOR_COUNT>)    _param_ca_rotor_count,

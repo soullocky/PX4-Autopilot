@@ -102,6 +102,7 @@
 #include <uORB/topics/tune_control.h>
 #include <uORB/topics/vehicle_attitude.h>
 #include <uORB/topics/vehicle_attitude_setpoint.h>
+#include <uORB/topics/mctilt_offboard_pitch.h>
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/vehicle_command_ack.h>
 #include <uORB/topics/vehicle_global_position.h>
@@ -401,12 +402,18 @@ private:
 	hrt_abstime _heartbeat_component_uart_bridge{0};
 
 	DEFINE_PARAMETERS(
+		(ParamInt<px4::params::CA_AIRFRAME>)       _param_ca_airframe,
+		(ParamInt<px4::params::CA_ROTOR_COUNT>)    _param_ca_rotor_count,
+		(ParamInt<px4::params::CA_SV_TL_COUNT>)    _param_ca_tilt_count,
+		(ParamInt<px4::params::MC_MCT_OBP_EN>)     _param_mc_mct_obp_en,
 		(ParamFloat<px4::params::BAT_CRIT_THR>)     _param_bat_crit_thr,
 		(ParamFloat<px4::params::BAT_EMERGEN_THR>)  _param_bat_emergen_thr,
 		(ParamFloat<px4::params::BAT_LOW_THR>)      _param_bat_low_thr
 	);
 
 	// Disallow copy construction and move assignment.
+	uORB::Publication<mctilt_offboard_pitch_s> _mctilt_pitch_pub{ORB_ID(mctilt_offboard_pitch)};
+
 	MavlinkReceiver(const MavlinkReceiver &) = delete;
 	MavlinkReceiver operator=(const MavlinkReceiver &) = delete;
 };

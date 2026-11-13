@@ -92,6 +92,8 @@ void LoggedTopics::add_default_topics()
 	add_optional_topic("launch_detection_status", 200);
 	add_optional_topic("magnetometer_bias_estimate", 200);
 	add_topic("manual_control_setpoint", 200);
+	add_optional_topic("mctilt_offboard_pitch", 50);
+	add_optional_topic("mctilt_pitch_status", 50);
 	add_topic("manual_control_switches");
 	add_topic("mission_result");
 	add_topic("navigator_mission_item");

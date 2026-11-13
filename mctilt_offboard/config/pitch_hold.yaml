@@ -1,0 +1,11 @@
+# 在 figure8.yaml 的共享连接/保护参数之后加载；原地测试不使用八字长宽和周期。
+control_pitch: true
+pitch_deg: 10.0           # 机体期望俯仰：正值抬头，负值低头（NED/FRD）
+pitch_amplitude_deg: 0.0  # 原地测试只使用固定目标，不叠加正弦
+pitch_ramp_time: 8.0      # 缓慢进入目标角和结束回正的时间
+settle_time: 10.0         # 进入倾角+稳定等待，必须 >= pitch_ramp_time
+pitch_hold_time: 20.0     # SETTLE 完成后额外保持目标角的时间
+max_tracking_error: 0.4  # 原地变姿位置误差保护，米；超时后保持当前反馈位置并回正
+error_timeout: 0.6
+max_pitch_error_deg: 15.0
+pitch_error_timeout: 1.0

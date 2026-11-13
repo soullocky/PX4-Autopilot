@@ -1,0 +1,28 @@
+# ROS 1 private parameters for /mctilt_offboard.
+# The node captures the current hover pose as its center. ENU coordinates, metres.
+rate: 50.0
+amplitude_x: 1.0          # total long-axis extent = 2.0 m
+amplitude_y: 0.6          # total short-axis extent = 0.6 m
+period: 18.0              # seconds per cycle
+cycles: 3
+ramp_time: 4.0            # smooth amplitude envelope at start and end
+prestream_time: 3.0       # must be >= 1 s before pilot switches to OFFBOARD
+settle_time: 10.0         # 起始倾角过渡+稳定等待，必须 >= pitch_ramp_time
+final_hold_time: 5.0      # reminder interval; hold streaming continues until mode exit
+pose_timeout: 0.5
+state_timeout: 3.0         # MAVROS state may update near heartbeat rate (~1 Hz)
+max_tracking_error: 1.0
+error_timeout: 0.6
+require_armed: true
+use_velocity_ff: true
+use_acceleration_ff: false
+align_with_initial_yaw: true
+
+# 仅用于本次 MCTilt 专用固件；false 恢复原来只发位置轨迹的行为。
+control_pitch: true
+pitch_deg: 10.0           # 机体 NED/FRD 俯仰角，正值抬头；不是舵机角度
+pitch_amplitude_deg: 0.0  # 0=固定俯仰；非零=八字过程中叠加平滑正弦俯仰
+pitch_period: 18.0       # 俯仰正弦周期，独立于位置周期；可设相同以同步相位
+pitch_ramp_time: 8.0     # 进入倾角/结束回正时间，增大目标角时也要增大此值
+max_pitch_error_deg: 15.0
+pitch_error_timeout: 1.0

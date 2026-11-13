@@ -212,6 +212,8 @@ set(msg_files
 	TiltrotorExtraControls.msg
 	TimesyncStatus.msg
 	TrajectorySetpoint6dof.msg
+	MctiltOffboardPitch.msg
+	MctiltPitchStatus.msg
 	TransponderReport.msg
 	TuneControl.msg
 	UavcanParameterRequest.msg

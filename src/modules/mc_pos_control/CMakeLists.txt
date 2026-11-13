@@ -34,6 +34,7 @@
 add_subdirectory(GotoControl)
 add_subdirectory(PositionControl)
 add_subdirectory(Takeoff)
+px4_add_unit_gtest(SRC MctiltPitchReferenceTest.cpp)
 
 px4_add_module(
 	MODULE modules__mc_pos_control

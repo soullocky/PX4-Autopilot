@@ -1618,6 +1618,29 @@ MavlinkReceiver::handle_message_set_attitude_target(mavlink_message_t *msg)
 
 		const uint8_t type_mask = attitude_target.type_mask;
 
+		// MCTilt 专用：姿态流只携带俯仰参考，不发布 Offboard 模式或最终姿态/推力目标。
+		// mask=71 表示忽略全部角速度和推力、使用四元数；未启用时也丢弃该专用包，避免误切姿态控制。
+		const bool mctilt = _param_ca_airframe.get() == 8 && _param_ca_rotor_count.get() == 4
+				    && _param_ca_tilt_count.get() == 4;
+
+		if (mctilt && (_param_mc_mct_obp_en.get() != 0 || type_mask == 71)) {
+			if (_param_mc_mct_obp_en.get() != 0 && type_mask == 71
+			    && msg->sysid == mavlink_system.sysid && msg->compid != mavlink_system.compid) {
+				matrix::Quatf reference{attitude_target.q};
+				const float norm = reference.norm();
+
+				if (reference.isAllFinite() && norm > 0.9f && norm < 1.1f) {
+					reference.normalize();
+					mctilt_offboard_pitch_s pitch{};
+					pitch.timestamp = hrt_absolute_time();
+					pitch.pitch = matrix::Eulerf(reference).theta();
+					_mctilt_pitch_pub.publish(pitch);
+				}
+			}
+
+			return;
+		}
+
 		const bool attitude = !(type_mask & ATTITUDE_TARGET_TYPEMASK_ATTITUDE_IGNORE);
 		const bool body_rates = !(type_mask & ATTITUDE_TARGET_TYPEMASK_BODY_ROLL_RATE_IGNORE)
 					&& !(type_mask & ATTITUDE_TARGET_TYPEMASK_BODY_PITCH_RATE_IGNORE);

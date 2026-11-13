@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="vehicle_ns" default="/"/>
+  <group ns="$(arg vehicle_ns)">
+    <!-- 与八字脚本使用相同节点名；同一飞行器只能运行一个测试。 -->
+    <node pkg="mctilt_offboard"
+          type="offboard_pitch_hold.py"
+          name="mctilt_offboard"
+          output="screen">
+      <rosparam command="load" file="$(find mctilt_offboard)/config/figure8.yaml"/>
+      <rosparam command="load" file="$(find mctilt_offboard)/config/pitch_hold.yaml"/>
+    </node>
+  </group>
+</launch>

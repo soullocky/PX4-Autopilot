@@ -387,6 +387,36 @@ PositionControlStates MulticopterPositionControl::set_vehicle_states(const vehic
 	return states;
 }
 
+float MulticopterPositionControl::updateMctiltPitch(float manual_pitch, float dt)
+{
+	_mctilt_pitch_sub.update(&_mctilt_pitch_input);
+	const hrt_abstime now = hrt_absolute_time();
+	const bool external = _param_mc_mct_obp_en.get() != 0 && _vehicle_control_mode.flag_control_offboard_enabled;
+	const bool fresh = MctiltPitchReference::fresh(now, _mctilt_pitch_input.timestamp,
+						    _mctilt_pitch_input.pitch, _param_mc_mct_obp_tmo.get());
+	const float limit = math::radians(math::constrain(_param_mc_mct_obp_max.get(), 0.f, 80.f));
+	// 独立俯仰流丢失时平滑回正；位置流仍由原有 Offboard 失联机制管理。
+	const float requested = external ? (fresh ? math::constrain(_mctilt_pitch_input.pitch, -limit, limit) : 0.f)
+				: manual_pitch;
+
+	if (external && !fresh && !_mctilt_pitch_timed_out) {
+		mavlink_log_critical(&_mavlink_log_pub, "MCTilt pitch stream lost: leveling\t");
+	}
+
+	_mctilt_pitch_timed_out = external && !fresh;
+	const float applied = _mctilt_pitch_reference.update(manual_pitch, requested, external, dt,
+			      math::radians(math::constrain(_param_mc_mct_obp_rate.get(), 1.f, 30.f)),
+			      _param_mc_aux_att_tau.get());
+	mctilt_pitch_status_s status{};
+	status.timestamp = now;
+	status.requested_pitch = requested;
+	status.applied_pitch = applied;
+	status.external_active = external;
+	status.input_valid = fresh;
+	_mctilt_pitch_status_pub.publish(status);
+	return applied;
+}
+
 void MulticopterPositionControl::Run()
 {
 	if (should_exit()) {
@@ -702,6 +732,9 @@ void MulticopterPositionControl::Run()
 					_aux_pitch_input_filter.reset(0.f);
 				}
 
+				// 原 AUX6 仅作为非 Offboard 的姿态来源；外部接管时不与遥控器叠加。
+				pitch_bias = updateMctiltPitch(pitch_bias, dt);
+
 				const matrix::Quatf attitude_yaw{cosf(local_pos_sp.yaw * 0.5f), 0.f, 0.f,
 								 sinf(local_pos_sp.yaw * 0.5f)};
 				float roll_sp = conventional_attitude.phi();
@@ -748,6 +781,7 @@ void MulticopterPositionControl::Run()
 			_takeoff.updateTakeoffState(_vehicle_control_mode.flag_armed, _vehicle_land_detected.landed, false, 10.f, true,
 						    vehicle_local_position.timestamp_sample);
 			_control.resetIntegral();
+			_mctilt_pitch_reference.reset();
 		}
 
 		// Publish takeoff status
